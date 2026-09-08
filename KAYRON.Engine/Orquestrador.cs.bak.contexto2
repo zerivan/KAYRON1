@@ -1,0 +1,363 @@
+﻿using System.Text.Json;
+using KAYRON.Core;
+using Microsoft.Extensions.Logging;
+
+namespace KAYRON.Engine;
+
+public sealed class Orquestrador : IOrquestrador
+{
+    private readonly IDecisor _decisor;
+    private readonly IDetectorIntencao _detectorIntencao;
+    private readonly ExecutorFerramentas _executorFerramentas;
+    private readonly ICatalogoFerramentas _catalogoFerramentas;
+    private readonly ILogger<Orquestrador> _logger;
+
+    public Orquestrador(
+        IDecisor decisor,
+        IDetectorIntencao detectorIntencao,
+        ExecutorFerramentas executorFerramentas,
+        ICatalogoFerramentas catalogoFerramentas,
+        ILogger<Orquestrador> logger)
+    {
+        ArgumentNullException.ThrowIfNull(decisor);
+        ArgumentNullException.ThrowIfNull(detectorIntencao);
+        ArgumentNullException.ThrowIfNull(executorFerramentas);
+        ArgumentNullException.ThrowIfNull(catalogoFerramentas);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _decisor = decisor;
+        _detectorIntencao = detectorIntencao;
+        _executorFerramentas = executorFerramentas;
+        _catalogoFerramentas = catalogoFerramentas;
+        _logger = logger;
+    }
+
+    public async Task<Resposta> ProcessarAsync(
+        Instrucao instrucao,
+        IContexto contexto,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(instrucao);
+        ArgumentNullException.ThrowIfNull(contexto);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entrada = instrucao.Conteudo.Trim();
+
+        if (string.IsNullOrWhiteSpace(entrada))
+        {
+            return new Resposta
+            {
+                Conteudo = "KAYRON não recebeu nenhuma instrução."
+            };
+        }
+
+        if (entrada.StartsWith("/"))
+        {
+            return ProcessarComando(
+                entrada,
+                contexto);
+        }
+
+        var ciclo =
+            new ContextoCiclo(contexto);
+
+        ciclo.Adicionar(
+            "ciclo:entrada_original",
+            entrada);
+
+        ciclo.Adicionar(
+            "ciclo:passo_atual",
+            "0");
+
+        _logger.LogInformation(
+            "Iniciando ciclo cognitivo real para: {Entrada}",
+            entrada);
+
+        await _decisor.DecidirAsync(
+            instrucao,
+            ciclo,
+            cancellationToken);
+
+        var intencao =
+            _detectorIntencao.Detectar(
+                entrada,
+                ciclo);
+
+        ciclo.Adicionar(
+            "ciclo:intencao",
+            intencao.Identificada
+                ? $"{intencao.Ferramenta}:{intencao.Operacao}"
+                : "desconhecida");
+
+        if (!intencao.Identificada)
+        {
+            ciclo.Adicionar(
+                "ciclo:estado",
+                "conversa_sem_intencao");
+
+            var respostaConversa =
+                ResponderComContexto(ciclo);
+
+            ciclo.Adicionar(
+                "ciclo:resposta",
+                respostaConversa.Conteudo);
+
+            ciclo.ConsolidarEm(contexto);
+
+            return respostaConversa;
+        }
+
+        var resposta =
+            await ExecutarIntencaoInterna(
+                entrada,
+                intencao,
+                ciclo,
+                cancellationToken);
+
+        ciclo.ConsolidarEm(contexto);
+
+        return resposta;
+    }
+
+    public async Task<Resposta> ProcessarIntencaoAsync(
+        Instrucao instrucao,
+        IContexto contexto,
+        IntencaoDetectada intencao,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(instrucao);
+        ArgumentNullException.ThrowIfNull(contexto);
+        ArgumentNullException.ThrowIfNull(intencao);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entrada = instrucao.Conteudo.Trim();
+
+        if (string.IsNullOrWhiteSpace(entrada))
+        {
+            return new Resposta
+            {
+                Conteudo = "KAYRON não recebeu nenhuma instrução."
+            };
+        }
+
+        var ciclo =
+            new ContextoCiclo(contexto);
+
+        ciclo.Adicionar(
+            "ciclo:entrada_original",
+            entrada);
+
+        ciclo.Adicionar(
+            "ciclo:intencao",
+            intencao.Identificada
+                ? $"{intencao.Ferramenta}:{intencao.Operacao}"
+                : "desconhecida");
+
+        if (!intencao.Identificada)
+        {
+            var resposta =
+                ResponderComContexto(ciclo);
+
+            ciclo.ConsolidarEm(contexto);
+
+            return resposta;
+        }
+
+        var resultado =
+            await ExecutarIntencaoInterna(
+                entrada,
+                intencao,
+                ciclo,
+                cancellationToken);
+
+        ciclo.ConsolidarEm(contexto);
+
+        return resultado;
+    }
+
+    private async Task<Resposta> ExecutarIntencaoInterna(
+        string entrada,
+        IntencaoDetectada intencao,
+        ContextoCiclo contexto,
+        CancellationToken cancellationToken)
+    {
+        var ferramenta =
+            _catalogoFerramentas.Obter(
+                intencao.Ferramenta);
+
+        if (ferramenta is null)
+        {
+            contexto.RegistrarDecisao(
+                "FERRAMENTA_NAO_ENCONTRADA",
+                intencao.Ferramenta,
+                intencao.Operacao,
+                "Ferramenta não encontrada no catálogo.",
+                false);
+
+            return new Resposta
+            {
+                Conteudo =
+                    $"KAYRON não encontrou a ferramenta '{intencao.Ferramenta}'."
+            };
+        }
+
+        if (contexto.AcaoJaExecutada(
+                ferramenta.Nome,
+                intencao.Operacao))
+        {
+            contexto.RegistrarDecisao(
+                "ACAO_JA_EXECUTADA",
+                ferramenta.Nome,
+                intencao.Operacao,
+                "Ação já registrada no contexto deste ciclo.",
+                true);
+
+            return new Resposta
+            {
+                Conteudo =
+                    "Essa ação já foi executada neste ciclo. " +
+                    "KAYRON não irá repeti-la."
+            };
+        }
+
+        var argumentos =
+            ExtrairArgumentos(
+                entrada,
+                ferramenta.Nome);
+
+        contexto.Adicionar(
+            "ciclo:acao_atual",
+            $"{ferramenta.Nome}:{intencao.Operacao}");
+
+        var resultado =
+            await _executorFerramentas.ExecutarAsync(
+                ferramenta.Nome,
+                argumentos,
+                contexto,
+                cancellationToken,
+                intencao.Operacao);
+
+        var conteudo =
+            JsonSerializer.Serialize(
+                resultado);
+
+        contexto.RegistrarDecisao(
+            "EXECUTAR",
+            ferramenta.Nome,
+            intencao.Operacao,
+            conteudo,
+            true);
+
+        contexto.Adicionar(
+            "ciclo:estado",
+            "acao_executada");
+
+        return new Resposta
+        {
+            Conteudo = conteudo
+        };
+    }
+
+    private Resposta ProcessarComando(
+        string entrada,
+        IContexto contexto)
+    {
+        var partes =
+            entrada[1..].Split(
+                ' ',
+                2,
+                StringSplitOptions.RemoveEmptyEntries);
+
+        if (partes.Length == 0)
+        {
+            return new Resposta
+            {
+                Conteudo = "Comando vazio."
+            };
+        }
+
+        var nome =
+            partes[0].Trim();
+
+        var argumentos =
+            partes.Length > 1
+                ? partes[1].Trim()
+                : string.Empty;
+
+        contexto.Adicionar(
+            "comando:nome",
+            nome);
+
+        contexto.Adicionar(
+            "comando:argumentos",
+            argumentos);
+
+        return new Resposta
+        {
+            Conteudo =
+                $"KAYRON recebeu o comando /{nome}. " +
+                "Comandos internos são processados separadamente do fluxo de linguagem natural."
+        };
+    }
+
+    private static Resposta ResponderComContexto(
+        ContextoCiclo contexto)
+    {
+        var memoriaEncontrada =
+            contexto.Obter(
+                "decisao:memoria:encontrada");
+
+        var chave =
+            contexto.Obter(
+                "decisao:memoria:chave");
+
+        var valor =
+            contexto.Obter(
+                "decisao:memoria:valor");
+
+        if (memoriaEncontrada == "true" &&
+            !string.IsNullOrWhiteSpace(chave) &&
+            !string.IsNullOrWhiteSpace(valor))
+        {
+            return new Resposta
+            {
+                Conteudo =
+                    $"Com base no contexto disponível: {valor}"
+            };
+        }
+
+        return new Resposta
+        {
+            Conteudo =
+                "KAYRON não encontrou uma ação necessária para esta entrada no contexto atual."
+        };
+    }
+
+    private static string ExtrairArgumentos(
+        string entrada,
+        string ferramenta)
+    {
+        var texto = entrada.Trim();
+
+        var indice =
+            texto.IndexOf(
+                ferramenta,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (indice >= 0)
+        {
+            var inicio =
+                indice + ferramenta.Length;
+
+            if (inicio < texto.Length)
+            {
+                return texto[inicio..].Trim();
+            }
+        }
+
+        return texto;
+    }
+}
+

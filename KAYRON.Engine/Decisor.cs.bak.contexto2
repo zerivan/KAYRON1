@@ -1,0 +1,105 @@
+﻿using KAYRON.Core;
+using Microsoft.Extensions.Logging;
+
+namespace KAYRON.Engine;
+
+public sealed class Decisor : IDecisor
+{
+    private readonly ConvocadorMemoria _convocadorMemoria;
+    private readonly ILogger<Decisor> _logger;
+
+    public Decisor(
+        ConvocadorMemoria convocadorMemoria,
+        ILogger<Decisor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(convocadorMemoria);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _convocadorMemoria = convocadorMemoria;
+        _logger = logger;
+    }
+
+    public Task<Resposta> DecidirAsync(
+        Instrucao instrucao,
+        IContexto contexto,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(instrucao);
+        ArgumentNullException.ThrowIfNull(contexto);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entrada = instrucao.Conteudo.Trim();
+
+        if (string.IsNullOrWhiteSpace(entrada))
+        {
+            return Task.FromResult(
+                new Resposta
+                {
+                    Conteudo = string.Empty
+                });
+        }
+
+        _convocadorMemoria.Convocar(
+            entrada,
+            contexto);
+
+        contexto.Adicionar(
+            "decisao:entrada",
+            entrada);
+
+        var memoria =
+            _convocadorMemoria.EncontrarRelevante(
+                entrada);
+
+        if (memoria is not null)
+        {
+            contexto.Adicionar(
+                "decisao:memoria:encontrada",
+                "true");
+
+            contexto.Adicionar(
+                "decisao:memoria:chave",
+                memoria.Chave);
+
+            contexto.Adicionar(
+                "decisao:memoria:valor",
+                memoria.Valor);
+
+            contexto.Adicionar(
+                "decisao:estado",
+                "memoria_disponivel");
+
+            _logger.LogInformation(
+                "Memória relevante convocada: {Chave}",
+                memoria.Chave);
+        }
+        else
+        {
+            contexto.Adicionar(
+                "decisao:memoria:encontrada",
+                "false");
+
+            contexto.Adicionar(
+                "decisao:memoria:chave",
+                string.Empty);
+
+            contexto.Adicionar(
+                "decisao:memoria:valor",
+                string.Empty);
+
+            contexto.Adicionar(
+                "decisao:estado",
+                "sem_memoria_relevante");
+
+            _logger.LogInformation(
+                "Nenhuma memória relevante encontrada para a entrada atual.");
+        }
+
+        return Task.FromResult(
+            new Resposta
+            {
+                Conteudo = string.Empty
+            });
+    }
+}

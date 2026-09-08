@@ -1,0 +1,15 @@
+﻿namespace KAYRON.Core;
+
+public interface IOrquestrador
+{
+    Task<Resposta> ProcessarAsync(
+        Instrucao instrucao,
+        IContexto contexto,
+        CancellationToken cancellationToken = default);
+
+    Task<Resposta> ProcessarIntencaoAsync(
+        Instrucao instrucao,
+        IContexto contexto,
+        IntencaoDetectada intencao,
+        CancellationToken cancellationToken = default);
+}

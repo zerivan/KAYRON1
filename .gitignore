@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Backups locais do projeto
+KAYRON.Backups/
+BACKUP_ARQUITETURA_*/

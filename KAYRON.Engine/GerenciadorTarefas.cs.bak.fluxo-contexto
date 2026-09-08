@@ -1,0 +1,265 @@
+﻿using System.Text.RegularExpressions;
+using KAYRON.Core;
+
+namespace KAYRON.Engine;
+
+public sealed class GerenciadorTarefas : IGerenciadorTarefas
+{
+    private readonly IPlanejador _planejador;
+    private readonly IExecutorPlano _executorPlano;
+    private readonly IOrquestrador _orquestrador;
+    private readonly ICatalogoFerramentas _catalogoFerramentas;
+    private readonly IDetectorIntencao _detectorIntencao;
+    private readonly IContextoProjeto _contextoProjeto;
+    private readonly ResolvedorConversa _resolvedorConversa;
+
+    public GerenciadorTarefas(
+        IPlanejador planejador,
+        IExecutorPlano executorPlano,
+        IOrquestrador orquestrador,
+        ICatalogoFerramentas catalogoFerramentas,
+        IDetectorIntencao detectorIntencao,
+        IContextoProjeto contextoProjeto,
+        ResolvedorConversa resolvedorConversa)
+    {
+        ArgumentNullException.ThrowIfNull(planejador);
+        ArgumentNullException.ThrowIfNull(executorPlano);
+        ArgumentNullException.ThrowIfNull(orquestrador);
+        ArgumentNullException.ThrowIfNull(catalogoFerramentas);
+        ArgumentNullException.ThrowIfNull(detectorIntencao);
+        ArgumentNullException.ThrowIfNull(contextoProjeto);
+        ArgumentNullException.ThrowIfNull(resolvedorConversa);
+
+        _planejador = planejador;
+        _executorPlano = executorPlano;
+        _orquestrador = orquestrador;
+        _catalogoFerramentas = catalogoFerramentas;
+        _detectorIntencao = detectorIntencao;
+        _contextoProjeto = contextoProjeto;
+        _resolvedorConversa = resolvedorConversa;
+    }
+
+    public async Task<Resposta> ExecutarAsync(
+        string objetivo,
+        IContexto contexto,
+        CancellationToken cancellationToken = default,
+        IntencaoDetectada? intencao = null)
+    {
+        ArgumentNullException.ThrowIfNull(contexto);
+
+        if (string.IsNullOrWhiteSpace(objetivo))
+        {
+            return new Resposta
+            {
+                Conteudo = "O objetivo da tarefa não foi informado."
+            };
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var diretorioBase =
+            ObterDiretorioBase(contexto);
+
+        var projeto =
+            _contextoProjeto.Detectar(
+                diretorioBase);
+
+        if (projeto is not null)
+        {
+            _contextoProjeto.Definir(
+                projeto);
+
+            contexto.Adicionar(
+                "diretorio_projeto",
+                projeto.Diretorio);
+
+            if (!string.IsNullOrWhiteSpace(
+                    projeto.ArquivoProjeto))
+            {
+                contexto.Adicionar(
+                    "arquivo_projeto",
+                    projeto.ArquivoProjeto);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    projeto.Solucao))
+            {
+                contexto.Adicionar(
+                    "solucao",
+                    projeto.Solucao);
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    projeto.Tipo))
+            {
+                contexto.Adicionar(
+                    "tipo_projeto",
+                    projeto.Tipo);
+            }
+        }
+
+        var intencaoDetectada =
+            intencao ??
+            _detectorIntencao.Detectar(
+                objetivo,
+                contexto);
+
+        var resolucaoConversa =
+            _resolvedorConversa.Resolver(
+                objetivo,
+                contexto,
+                _contextoProjeto,
+                intencaoDetectada);
+
+        if (resolucaoConversa.TemResposta)
+        {
+            return new Resposta
+            {
+                Conteudo = resolucaoConversa.Resposta!
+            };
+        }
+
+        if (resolucaoConversa.TemIntencao)
+        {
+            intencaoDetectada =
+                resolucaoConversa.Intencao!;
+        }
+
+        if (intencaoDetectada.Identificada)
+        {
+            var ferramenta =
+                _catalogoFerramentas.Obter(
+                    intencaoDetectada.Ferramenta);
+
+            if (ferramenta is not null)
+            {
+                var argumentos =
+                    ExtrairArgumentos(
+                        objetivo,
+                        ferramenta.Nome);
+
+                contexto.Adicionar(
+                    "execucao:intencao:ferramenta",
+                    intencaoDetectada.Ferramenta);
+
+                contexto.Adicionar(
+                    "execucao:intencao:operacao",
+                    intencaoDetectada.Operacao);
+
+                contexto.Adicionar(
+                    "execucao:intencao:confianca",
+                    intencaoDetectada.Confianca.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture));
+
+                contexto.Adicionar(
+                    "execucao:intencao:evidencia",
+                    intencaoDetectada.Evidencia ?? string.Empty);
+
+                return await _orquestrador.ProcessarIntencaoAsync(
+                    new Instrucao
+                    {
+                        Conteudo = objetivo
+                    },
+                    contexto,
+                    intencaoDetectada,
+                    cancellationToken);
+            }
+        }
+
+        var plano =
+            _planejador.CriarPlano(
+                objetivo,
+                contexto);
+
+        var resultado =
+            await _executorPlano.ExecutarAsync(
+                plano,
+                contexto,
+                cancellationToken);
+
+        return ConverterResultado(
+            resultado);
+    }
+
+    private static string ObterDiretorioBase(
+        IContexto contexto)
+    {
+        var projeto =
+            contexto.Obter(
+                "diretorio_projeto");
+
+        if (!string.IsNullOrWhiteSpace(projeto))
+        {
+            return projeto;
+        }
+
+        var diretorio =
+            contexto.Obter(
+                "diretorio");
+
+        if (!string.IsNullOrWhiteSpace(diretorio))
+        {
+            return diretorio;
+        }
+
+        return Directory.GetCurrentDirectory();
+    }
+
+    private static string ExtrairArgumentos(
+        string objetivo,
+        string nomeFerramenta)
+    {
+        var padrao =
+            $@"^\s*(?:/)?{Regex.Escape(nomeFerramenta)}\s*";
+
+        var resultado =
+            Regex.Replace(
+                objetivo,
+                padrao,
+                string.Empty,
+                RegexOptions.IgnoreCase);
+
+        return resultado.Trim();
+    }
+
+    private static Resposta ConverterResultado(
+        ResultadoPlano resultado)
+    {
+        if (!resultado.Sucesso)
+        {
+            return new Resposta
+            {
+                Conteudo =
+                    $"Erro: {resultado.Erro ?? "A execução do plano falhou."}"
+            };
+        }
+
+        var respostas =
+            resultado.Resultados;
+
+        if (respostas.Count == 0)
+        {
+            return new Resposta
+            {
+                Conteudo =
+                    "Plano executado sem resultados."
+            };
+        }
+
+        var conteudo =
+            string.Join(
+                Environment.NewLine,
+                respostas
+                    .Select(r => r.Conteudo)
+                    .Where(c => !string.IsNullOrWhiteSpace(c)));
+
+        return new Resposta
+        {
+            Conteudo =
+                string.IsNullOrWhiteSpace(conteudo)
+                    ? "Plano executado com sucesso."
+                    : conteudo
+        };
+    }
+}
+

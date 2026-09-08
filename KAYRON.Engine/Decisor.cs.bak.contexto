@@ -1,0 +1,123 @@
+﻿using KAYRON.Core;
+using Microsoft.Extensions.Logging;
+
+namespace KAYRON.Engine;
+
+public sealed class Decisor : IDecisor
+{
+    private readonly ConvocadorMemoria _convocadorMemoria;
+    private readonly ILogger<Decisor> _logger;
+
+    public Decisor(
+        ConvocadorMemoria convocadorMemoria,
+        ILogger<Decisor> logger)
+    {
+        ArgumentNullException.ThrowIfNull(convocadorMemoria);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _convocadorMemoria = convocadorMemoria;
+        _logger = logger;
+    }
+
+    public Task<Resposta> DecidirAsync(
+        Instrucao instrucao,
+        IContexto contexto,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(instrucao);
+        ArgumentNullException.ThrowIfNull(contexto);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entrada = instrucao.Conteudo.Trim();
+
+        if (string.IsNullOrWhiteSpace(entrada))
+        {
+            return Task.FromResult(
+                new Resposta
+                {
+                    Conteudo = string.Empty
+                });
+        }
+
+        /*
+         * 1. Convoca todas as memórias disponíveis.
+         * A memória não responde diretamente ao usuário.
+         * Ela alimenta o contexto da decisão.
+         */
+        _convocadorMemoria.Convocar(
+            entrada,
+            contexto);
+
+        /*
+         * 2. Procura uma memória realmente relacionada
+         * à entrada atual.
+         */
+        var memoria =
+            _convocadorMemoria.EncontrarRelevante(
+                entrada);
+
+        if (memoria is not null)
+        {
+            contexto.Adicionar(
+                "decisao:memoria:encontrada",
+                "true");
+
+            contexto.Adicionar(
+                "decisao:memoria:chave",
+                memoria.Chave);
+
+            contexto.Adicionar(
+                "decisao:memoria:valor",
+                memoria.Valor);
+
+            _logger.LogInformation(
+                "Memória relevante convocada: {Chave}",
+                memoria.Chave);
+        }
+        else
+        {
+            contexto.Adicionar(
+                "decisao:memoria:encontrada",
+                "false");
+
+            contexto.Adicionar(
+                "decisao:memoria:chave",
+                string.Empty);
+
+            contexto.Adicionar(
+                "decisao:memoria:valor",
+                string.Empty);
+
+            _logger.LogInformation(
+                "Nenhuma memória relevante encontrada para a entrada atual.");
+        }
+
+        /*
+         * 3. Registra a entrada como objeto de decisão.
+         */
+        contexto.Adicionar(
+            "decisao:entrada",
+            entrada);
+
+        /*
+         * 4. O decisor não fabrica uma resposta artificial
+         * apenas porque encontrou uma memória.
+         *
+         * A decisão permanece no contexto para que o
+         * orquestrador determine o próximo passo:
+         * conversar, esclarecer ou executar uma capacidade.
+         */
+        contexto.Adicionar(
+            "decisao:estado",
+            memoria is null
+                ? "sem_memoria_relevante"
+                : "memoria_disponivel");
+
+        return Task.FromResult(
+            new Resposta
+            {
+                Conteudo = string.Empty
+            });
+    }
+}

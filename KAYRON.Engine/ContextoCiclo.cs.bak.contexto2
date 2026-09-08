@@ -1,0 +1,186 @@
+﻿using KAYRON.Core;
+
+namespace KAYRON.Engine;
+
+public sealed class ContextoCiclo : IContexto
+{
+    private readonly Dictionary<string, string> _dados;
+    private readonly List<RegistroDecisao> _historico;
+
+    public IReadOnlyDictionary<string, string> Dados => _dados;
+    public IReadOnlyList<RegistroDecisao> HistoricoDecisoes => _historico;
+    public int PassoAtual => _historico.Count;
+
+    public ContextoCiclo(IContexto contexto)
+    {
+        ArgumentNullException.ThrowIfNull(contexto);
+
+        _dados = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+
+        _historico = new List<RegistroDecisao>();
+
+        CopiarDadosConhecidos(contexto);
+    }
+
+    public void Adicionar(string chave, string valor)
+    {
+        if (string.IsNullOrWhiteSpace(chave))
+        {
+            return;
+        }
+
+        _dados[chave] = valor ?? string.Empty;
+    }
+
+    public string? Obter(string chave)
+    {
+        if (string.IsNullOrWhiteSpace(chave))
+        {
+            return null;
+        }
+
+        return _dados.TryGetValue(chave, out var valor)
+            ? valor
+            : null;
+    }
+
+    public void RegistrarDecisao(
+        string acao,
+        string? ferramenta,
+        string? operacao,
+        string? resultado,
+        bool concluido)
+    {
+        _historico.Add(
+            new RegistroDecisao
+            {
+                Passo = _historico.Count + 1,
+                Acao = acao,
+                Ferramenta = ferramenta ?? string.Empty,
+                Operacao = operacao ?? string.Empty,
+                Resultado = resultado ?? string.Empty,
+                Concluido = concluido
+            });
+
+        Adicionar(
+            "ciclo:passo_atual",
+            PassoAtual.ToString());
+
+        Adicionar(
+            "ciclo:ultima_acao",
+            acao);
+
+        Adicionar(
+            "ciclo:ultima_ferramenta",
+            ferramenta ?? string.Empty);
+
+        Adicionar(
+            "ciclo:ultima_operacao",
+            operacao ?? string.Empty);
+
+        Adicionar(
+            "ciclo:ultimo_resultado",
+            resultado ?? string.Empty);
+
+        Adicionar(
+            "ciclo:historico_total",
+            HistoricoDecisoes.Count.ToString());
+    }
+
+    public bool AcaoJaExecutada(
+        string ferramenta,
+        string operacao)
+    {
+        return _historico.Any(
+            x =>
+                x.Concluido &&
+                x.Ferramenta.Equals(
+                    ferramenta,
+                    StringComparison.OrdinalIgnoreCase) &&
+                x.Operacao.Equals(
+                    operacao,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void ConsolidarEm(IContexto destino)
+    {
+        ArgumentNullException.ThrowIfNull(destino);
+
+        foreach (var item in _dados)
+        {
+            destino.Adicionar(
+                item.Key,
+                item.Value);
+        }
+
+        destino.Adicionar(
+            "ciclo:passo_atual",
+            PassoAtual.ToString());
+
+        destino.Adicionar(
+            "ciclo:historico_total",
+            HistoricoDecisoes.Count.ToString());
+
+        var historico =
+            string.Join(
+                Environment.NewLine,
+                HistoricoDecisoes.Select(
+                    x =>
+                        $"Passo {x.Passo}: " +
+                        $"{x.Ferramenta}:{x.Operacao} " +
+                        $"Concluído={x.Concluido}"));
+
+        destino.Adicionar(
+            "ciclo:historico",
+            historico);
+    }
+
+    private void CopiarDadosConhecidos(
+        IContexto contexto)
+    {
+        var chaves = new[]
+        {
+            "mensagem_atual",
+            "instrucao_resolvida",
+            "instrucao_interpretada",
+            "contexto_conversacional",
+            "idioma_codigo",
+            "idioma_nome",
+            "idioma_confianca",
+            "intencao_detectada",
+            "ultima_resposta",
+            "diretorio_projeto",
+            "arquivo_projeto",
+            "solucao",
+            "tipo_projeto",
+            "decisao:memoria:encontrada",
+            "decisao:memoria:chave",
+            "decisao:memoria:valor",
+            "memoria:instrucao",
+            "memoria:ultima_instrucao",
+            "memoria:ultima_intencao",
+            "memoria:aprendidas_total"
+        };
+
+        foreach (var chave in chaves)
+        {
+            var valor = contexto.Obter(chave);
+
+            if (!string.IsNullOrWhiteSpace(valor))
+            {
+                _dados[chave] = valor;
+            }
+        }
+    }
+}
+
+public sealed class RegistroDecisao
+{
+    public int Passo { get; init; }
+    public string Acao { get; init; } = string.Empty;
+    public string Ferramenta { get; init; } = string.Empty;
+    public string Operacao { get; init; } = string.Empty;
+    public string Resultado { get; init; } = string.Empty;
+    public bool Concluido { get; init; }
+}
