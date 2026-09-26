@@ -1,4 +1,4 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
@@ -6,16 +6,25 @@ public sealed class ConvocadorMemoria
 {
     private readonly IMemoria _memoria;
     private readonly IMemoriaAprendida _memoriaAprendida;
+    private readonly MemoriaSemantica _memoriaSemantica;
+    private readonly MemoriaPostgres _memoriaPostgres;
 
     public ConvocadorMemoria(
         IMemoria memoria,
-        IMemoriaAprendida memoriaAprendida)
+        IMemoriaAprendida memoriaAprendida,
+        MemoriaSemantica memoriaSemantica,
+        MemoriaPostgres memoriaPostgres
+    )
     {
         ArgumentNullException.ThrowIfNull(memoria);
         ArgumentNullException.ThrowIfNull(memoriaAprendida);
+        ArgumentNullException.ThrowIfNull(memoriaSemantica);
+        ArgumentNullException.ThrowIfNull(memoriaPostgres);
 
         _memoria = memoria;
         _memoriaAprendida = memoriaAprendida;
+        _memoriaSemantica = memoriaSemantica;
+        _memoriaPostgres = memoriaPostgres;
     }
 
     public void Convocar(
@@ -49,25 +58,43 @@ public sealed class ConvocadorMemoria
                 "memoria:ultima_intencao",
                 ultimaIntencao);
         }
+        var exata = _memoriaAprendida.Recuperar(texto);
+        var memóriasRelevantes = exata is not null
+            ? new[] { exata }
+            : _memoriaPostgres.Pesquisar(texto, 3);
 
-        var aprendidas =
-            _memoriaAprendida.Listar();
-
-        contexto.Adicionar(
-            "memoria:aprendidas_total",
-            aprendidas.Count.ToString());
-
-        foreach (var memoria in aprendidas)
+        if (memóriasRelevantes.Count == 0)
         {
-            if (string.IsNullOrWhiteSpace(memoria.Chave) ||
-                string.IsNullOrWhiteSpace(memoria.Valor))
+            memóriasRelevantes = _memoriaSemantica.Pesquisar(texto, _memoriaAprendida.Listar(), 3);
+        }
+
+        foreach (var memoriaRelevante in memóriasRelevantes)
+        {
+            if (string.IsNullOrWhiteSpace(memoriaRelevante.Valor) ||
+                memoriaRelevante.Valor.TrimStart().StartsWith(
+                    "Pesquisa realizada para:",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
             contexto.Adicionar(
-                $"memoria:aprendida:{memoria.Chave}",
-                memoria.Valor);
+                $"memoria:aprendida:{memoriaRelevante.Chave}",
+                memoriaRelevante.Valor);
+        }
+
+        var memóriasValidas = memóriasRelevantes
+            .Where(m => !string.IsNullOrWhiteSpace(m.Valor) &&
+                        !m.Valor.TrimStart().StartsWith(
+                            "Pesquisa realizada para:",
+                            StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (memóriasValidas.Length > 0)
+        {
+            contexto.Adicionar(
+                "memoria:aprendida_relevante",
+                string.Join(",", memóriasValidas.Select(m => m.Chave)));
         }
     }
 
@@ -106,6 +133,7 @@ public sealed class ConvocadorMemoria
             }
 
             var chave = Normalizar(memoria.Chave);
+            var valor = Normalizar(memoria.Valor);
             var pontuacao = 0;
 
             if (texto.Contains(
@@ -122,6 +150,13 @@ public sealed class ConvocadorMemoria
                         StringComparison.OrdinalIgnoreCase))
                 {
                     pontuacao += 20;
+                }
+
+                if (valor.Contains(
+                        palavra,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    pontuacao += 5;
                 }
             }
 

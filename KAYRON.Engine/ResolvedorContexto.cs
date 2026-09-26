@@ -71,29 +71,69 @@ public sealed class ResolvedorContexto
             }
         }
 
-        if (ContemReferencia(
-                resultado,
-                ReferenciasResultado))
-        {
-            var ultimaResposta =
-                contexto.Obter(
-                    "ultima_resposta");
+        var ultimaResposta =
+            contexto.Obter("ultima_resposta");
 
-            if (!string.IsNullOrWhiteSpace(
-                    ultimaResposta))
+        var origemFerramenta =
+            contexto.Obter("ultima_origem_ferramenta");
+
+        var origemOperacao =
+            contexto.Obter("ultima_origem_operacao");
+
+        if (!string.IsNullOrWhiteSpace(ultimaResposta) &&
+            (ContemReferencia(resultado, ReferenciasResultado) ||
+             EhContinuacaoConversacional(resultado)))
+        {
+            contexto.Adicionar(
+                "referencia_resolvida",
+                "ultima_resposta");
+
+            if (EhOrigemInternet(origemFerramenta, origemOperacao))
             {
                 contexto.Adicionar(
-                    "referencia_resolvida",
-                    "ultima_resposta");
-
-                resultado =
-                    $"{resultado}{Environment.NewLine}" +
-                    $"Contexto da referência:{Environment.NewLine}" +
-                    ultimaResposta;
+                    "continuacao_origem_internet",
+                    "sim");
             }
+
+            resultado =
+                $"{resultado}{Environment.NewLine}" +
+                $"Contexto da referência:{Environment.NewLine}" +
+                ultimaResposta;
         }
 
         return resultado;
+    }
+
+    private static bool EhContinuacaoConversacional(string texto)
+    {
+        return texto.StartsWith("fale mais", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("me fale mais", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("me conte mais", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("conte mais", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("explique mais", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("explique melhor", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("fale sobre ele", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("fale sobre ela", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("sobre ele", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("sobre ela", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("e ele", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("e ela", StringComparison.OrdinalIgnoreCase) ||
+               texto.Equals("ele", StringComparison.OrdinalIgnoreCase) ||
+               texto.Equals("ela", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool EhOrigemInternet(
+        string? ferramenta,
+        string? operacao)
+    {
+        return string.Equals(
+                   ferramenta,
+                   "internet",
+                   StringComparison.OrdinalIgnoreCase) &&
+               string.Equals(
+                   operacao,
+                   "pesquisar",
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContemReferencia(

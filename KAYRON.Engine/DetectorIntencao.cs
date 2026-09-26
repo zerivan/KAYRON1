@@ -1,4 +1,5 @@
-﻿using KAYRON.Core;
+using System.Text.RegularExpressions;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
@@ -39,6 +40,38 @@ public sealed class DetectorIntencao : IDetectorIntencao
         }
 
         if (ContemAlgum(normalizado,
+                "pesquise",
+                "pesquisar",
+                "pesquisa",
+                "procure na internet",
+                "procure na web",
+                "pesquise na internet",
+                "pesquise na web",
+                "busque na internet",
+                "busque na web",
+                "qual e o atual",
+                "quem e o atual",
+                "preco atual",
+                "cotacao atual",
+                "cotacao do dolar",
+                "cotacao dolar",
+                "valor do dolar",
+                "dolar hoje",
+                "dolar agora",
+                "preco do dolar",
+                "noticias de hoje"))
+        {
+            return new IntencaoDetectada
+            {
+                Ferramenta = "internet",
+                Operacao = "pesquisar",
+                Confianca = 0.97,
+                Identificada = true,
+                Evidencia = texto
+            };
+        }
+
+        if (ContemAlgum(normalizado,
                 "analise o codigo",
                 "analisar o codigo",
                 "analise este codigo",
@@ -58,6 +91,18 @@ public sealed class DetectorIntencao : IDetectorIntencao
             };
         }
 
+        if (EhMatematica(normalizado))
+        {
+            return new IntencaoDetectada
+            {
+                Ferramenta = "matematica",
+                Operacao = "calcular",
+                Confianca = 0.99,
+                Identificada = true,
+                Evidencia = texto
+            };
+        }
+
         return new IntencaoDetectada
         {
             Ferramenta = string.Empty,
@@ -66,6 +111,27 @@ public sealed class DetectorIntencao : IDetectorIntencao
             Identificada = false,
             Evidencia = texto
         };
+    }
+
+    private static bool EhMatematica(string texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+            return false;
+
+        var expressao = Regex.Match(
+            texto,
+            @"(?<![A-Za-z0-9_])(\d+(?:[.,]\d+)?)\s*([+\-*/x×÷])\s*(\d+(?:[.,]\d+)?)(?![A-Za-z0-9_])",
+            RegexOptions.CultureInvariant);
+
+        if (expressao.Success)
+            return true;
+
+        return ContemAlgum(texto,
+                "quanto e",
+                "quanto eh",
+                "calcule",
+                "calcular") &&
+            expressao.Success;
     }
 
     private static bool ContemAlgum(

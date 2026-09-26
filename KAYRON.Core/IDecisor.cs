@@ -2,7 +2,7 @@
 
 public interface IDecisor
 {
-    Task<Resposta> DecidirAsync(
+    Task<DecisaoAgente> DecidirAsync(
         Instrucao instrucao,
         IContexto contexto,
         CancellationToken cancellationToken = default);

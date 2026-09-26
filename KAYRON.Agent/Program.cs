@@ -1,4 +1,4 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 using KAYRON.Engine;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +32,10 @@ builder.Logging.ClearProviders();
         }
 
         builder.Services.AddSingleton<IMemoria, Memoria>();
+        builder.Services.AddSingleton<IEmbeddingMemoria, EmbeddingMemoriaLocal>();
+        builder.Services.Configure<PostgresMemoriaOptions>(builder.Configuration.GetSection(PostgresMemoriaOptions.SectionName));
+        builder.Services.AddSingleton<MemoriaPostgres>();
+        builder.Services.AddSingleton<MemoriaSemantica>();
 
         builder.Services.AddSingleton<MemoriaAprendidaPersistente>(
             serviceProvider =>
@@ -44,7 +48,8 @@ builder.Logging.ClearProviders();
             serviceProvider =>
                 new KAYRON.Engine.MemoriaAprendida(
                     serviceProvider.GetRequiredService<
-                        MemoriaAprendidaPersistente>()));
+                        MemoriaAprendidaPersistente>(),
+                    serviceProvider.GetRequiredService<MemoriaPostgres>()));
 
         builder.Services.AddSingleton<Interpretador>();
         builder.Services.AddSingleton<DispatcherComandos>();
@@ -61,6 +66,41 @@ builder.Logging.ClearProviders();
         builder.Services.AddSingleton<IExecutorPlano, ExecutorPlano>();
         builder.Services.AddSingleton<IContextoExecucao, GerenciadorContextoExecucao>();
         builder.Services.AddSingleton<CatalogoCapacidades>();
+
+        builder.Services.Configure<ModeloInteligenciaOptions>(
+            builder.Configuration.GetSection(ModeloInteligenciaOptions.SectionName));
+
+        builder.Services.AddSingleton<HttpClient>();
+        builder.Services.AddSingleton<PesquisaWeb>();
+        builder.Services.AddSingleton<DeepSearch>();
+        builder.Services.AddSingleton<GestorConhecimento>();
+        builder.Services.AddSingleton<IModeloInteligencia>(serviceProvider =>
+        {
+            var options = serviceProvider
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<ModeloInteligenciaOptions>>()
+                .Value;
+
+            if (options.Provedor.Equals("IBM", StringComparison.OrdinalIgnoreCase) ||
+                options.Provedor.Equals("Watsonx", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ModeloInteligenciaWatsonx(
+                    serviceProvider.GetRequiredService<HttpClient>(),
+                    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModeloInteligenciaOptions>>(),
+                    serviceProvider.GetRequiredService<ILogger<ModeloInteligenciaWatsonx>>());
+            }
+
+            if (options.Provedor.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ModeloInteligenciaGemini(
+                    serviceProvider.GetRequiredService<HttpClient>(),
+                    serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModeloInteligenciaOptions>>(),
+                    serviceProvider.GetRequiredService<ILogger<ModeloInteligenciaGemini>>());
+            }
+
+            return new ModeloInteligenciaLocal(
+                serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModeloInteligenciaOptions>>(),
+                serviceProvider.GetRequiredService<ILogger<ModeloInteligenciaLocal>>());
+        });
 
         builder.Services.AddSingleton<IDecisor, Decisor>();
         builder.Services.AddSingleton<IProcessador, Processador>();

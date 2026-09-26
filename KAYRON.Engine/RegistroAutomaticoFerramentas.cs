@@ -32,6 +32,7 @@ public static class RegistroAutomaticoFerramentas
         services.AddSingleton<IFerramenta, FerramentaInfo>();
         services.AddSingleton<IFerramenta, FerramentaArquivos>();
         services.AddSingleton<IFerramenta, FerramentaSistema>();
+        services.AddSingleton<IFerramenta, FerramentaInternet>();
         services.AddSingleton<IFerramenta, FerramentaMemoria>();
         services.AddSingleton<IFerramenta, FerramentaProcessos>();
         services.AddSingleton<IFerramenta, FerramentaTerminal>();
@@ -40,7 +41,7 @@ public static class RegistroAutomaticoFerramentas
         services.AddSingleton<IProjetoExecutor, ProjetoExecutor>();
         services.AddSingleton<IFerramenta, FerramentaProjeto>();
         services.AddSingleton<IDiagnostico, Diagnostico>();
-services.AddSingleton<IInterpretadorDiagnostico, InterpretadorDiagnostico>();
+        services.AddSingleton<IInterpretadorDiagnostico, InterpretadorDiagnostico>();
         services.AddSingleton<IFerramenta, FerramentaDiagnostico>();
         services.AddSingleton<IAnalisadorCodigo, AnalisadorCodigo>();
         services.AddSingleton<IFerramenta, FerramentaAnaliseCodigo>();
@@ -72,26 +73,3 @@ services.AddSingleton<IInterpretadorDiagnostico, InterpretadorDiagnostico>();
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

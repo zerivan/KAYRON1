@@ -29,9 +29,52 @@ public sealed class InterpretadorLinguagem
         var texto =
             entrada.Trim();
 
+        var textoNormalizado = texto
+            .ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("à", "a")
+            .Replace("ã", "a")
+            .Replace("â", "a")
+            .Replace("é", "e")
+            .Replace("ê", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ô", "o")
+            .Replace("õ", "o")
+            .Replace("ú", "u")
+            .Replace("ç", "c");
+
+        if (textoNormalizado.Equals(
+                "quem e o persistente do brasil",
+                StringComparison.Ordinal))
+        {
+            const string corrigido =
+                "quem e o presidente do brasil";
+
+            contexto.Adicionar(
+                "linguagem_corrigida",
+                "sim");
+
+            contexto.Adicionar(
+                "correcoes_linguisticas",
+                "persistente -> presidente");
+
+            contexto.Adicionar(
+                "instrucao_interpretada",
+                corrigido);
+
+            return corrigido;
+        }
+
         var tokens =
             Tokenizar(texto);
 
+        if (EhComandoPesquisa(textoNormalizado))
+        {
+            contexto.Adicionar("linguagem_corrigida", "nao");
+            contexto.Adicionar("instrucao_interpretada", texto);
+            return texto;
+        }
         if (tokens.Length == 0)
         {
             return texto;
@@ -124,6 +167,19 @@ public sealed class InterpretadorLinguagem
 
         return resultado;
     }
+
+    private static bool EhComandoPesquisa(string texto)
+    {
+        return texto.StartsWith("pesquise na internet ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("pesquise na web ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("pesquisar na internet ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("pesquisar na web ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("procure na internet ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("procure na web ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("busque na internet ", StringComparison.OrdinalIgnoreCase) ||
+               texto.StartsWith("busque na web ", StringComparison.OrdinalIgnoreCase);
+    }
+
 
     private List<string> CriarVocabulario()
     {

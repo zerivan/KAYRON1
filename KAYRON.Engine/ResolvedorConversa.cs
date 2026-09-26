@@ -1,4 +1,4 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
@@ -24,6 +24,21 @@ public sealed class ResolvedorConversa
 
         var texto = Normalizar(objetivo);
         texto = CorrigirVariacoesConhecidas(texto);
+
+        if (EhReferenciaAcaoConversacional(texto) ||
+            EhPerguntaSobreFerramenta(texto))
+        {
+            return new ResultadoResolucaoConversa();
+        }
+
+        if (EhCaminhoSemAcao(texto))
+        {
+            return new ResultadoResolucaoConversa
+            {
+                Resposta =
+                    "Recebi um caminho, mas voc├¬ n├úo informou o que deseja fazer com ele. Posso analisar este projeto, listar os arquivos ou verificar o conte├║do. O que voc├¬ gostaria que eu fizesse?"
+            };
+        }
 
         if (!intencao.Identificada)
         {
@@ -324,28 +339,100 @@ public sealed class ResolvedorConversa
             "encontre o erro");
     }
 
+    private static bool EhReferenciaAcaoConversacional(string texto)
+    {
+        return ContemAlgum(
+            texto,
+            "fale sobre esta acao",
+            "fale sobre essa acao",
+            "explique esta acao",
+            "explique essa acao",
+            "fale mais sobre esta acao",
+            "fale mais sobre essa acao",
+            "o que e esta acao",
+            "o que e essa acao");
+    }
+
+    private static bool EhPerguntaSobreFerramenta(string texto)
+    {
+        if (!ContemAlgum(
+                texto,
+                "ferramenta",
+                "ferramentas",
+                "feramenta",
+                "feramentas"))
+        {
+            return false;
+        }
+
+        return ContemAlgum(
+            texto,
+            "voce nao",
+            "voce encontrou",
+            "encontrou a ferramenta",
+            "ferramenta de lista",
+            "sim ou nao",
+            "esta disponivel",
+            "esta funcionando");
+    }
+
+    private static bool EhCaminhoSemAcao(string texto)
+    {
+        if (!texto.Contains("c:\\", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !ContemAlgum(
+            texto,
+            "analise",
+            "analisar",
+            "analisa",
+            "verifique",
+            "verificar",
+            "verifica",
+            "liste",
+            "listar",
+            "mostre",
+            "mostrar",
+            "leia",
+            "ler",
+            "le",
+            "abra",
+            "abrir",
+            "execute",
+            "executar",
+            "corrija",
+            "corrigir",
+            "pesquise",
+            "pesquisar");
+    }
+
     private static bool EhPedidoDeArquivos(string texto)
     {
         return ContemAlgum(
             texto,
-            "arquivo",
-            "arquivos",
-            "pasta",
-            "pastas",
-            "documento",
-            "documentos",
-            "diretorio",
-            "diretorios",
             "listar arquivos",
             "liste os arquivos",
+            "listar os arquivos",
             "mostrar arquivos",
+            "mostre os arquivos",
+            "mostrar os arquivos",
             "mostre os arquivos",
             "listar pastas",
             "liste as pastas",
+            "listar as pastas",
             "mostrar pastas",
             "mostre as pastas",
+            "mostrar as pastas",
             "procurar arquivo",
-            "procure o arquivo");
+            "procure o arquivo",
+            "procurar arquivos",
+            "procure os arquivos",
+            "procurar pasta",
+            "procure a pasta",
+            "procurar pastas",
+            "procure as pastas");
     }
 
     private static bool RefereSeAoProjetoAtual(string texto)

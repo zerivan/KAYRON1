@@ -1,4 +1,4 @@
-﻿namespace KAYRON.Core;
+namespace KAYRON.Core;
 
 public interface IContextoConversacional
 {
@@ -6,6 +6,8 @@ public interface IContextoConversacional
         IReadOnlyCollection<MensagemConversa> mensagens);
 
     string ObterResumo();
+
+    string ObterMensagensJson();
 
     string? UltimaMensagemUsuario { get; }
 

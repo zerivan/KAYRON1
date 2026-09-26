@@ -1,11 +1,10 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 using Microsoft.Extensions.Logging;
 
 namespace KAYRON.Engine;
 
 public sealed class Decisor : IDecisor
 {
-    private readonly ConvocadorMemoria _convocadorMemoria;
     private readonly ILogger<Decisor> _logger;
 
     public Decisor(
@@ -15,7 +14,7 @@ public sealed class Decisor : IDecisor
         ArgumentNullException.ThrowIfNull(convocadorMemoria);
         ArgumentNullException.ThrowIfNull(logger);
 
-        _convocadorMemoria = convocadorMemoria;
+        _ = convocadorMemoria;
         _logger = logger;
     }
 
@@ -53,9 +52,8 @@ public sealed class Decisor : IDecisor
                     }));
         }
 
-        _convocadorMemoria.Convocar(
-            entrada,
-            ciclo);
+        // A memória aprendida não decide respostas conversacionais.
+        // O conhecimento persistido será usado somente como fallback quando a IA estiver indisponível.
 
         var resultadoDisponivel =
             ciclo.Obter("ciclo:resultado_disponivel");
@@ -68,12 +66,72 @@ public sealed class Decisor : IDecisor
             ciclo.Obter("instrucao_interpretada")
             ?? entrada;
 
+        var continuacaoOrigemInternet =
+            ciclo.Obter("continuacao_origem_internet");
+
+        if (string.Equals(
+                continuacaoOrigemInternet,
+                "sim",
+                StringComparison.OrdinalIgnoreCase) &&
+            !EhIntencaoTecnica(intencao))
+        {
+            ciclo.Adicionar(
+                "intencao_detectada",
+                "internet:pesquisar");
+
+            ciclo.Adicionar(
+                "intencao_evidencia",
+                "continuação de conversa originada por pesquisa na Internet");
+
+            intencao = "internet:pesquisar";
+        }
+
         _logger.LogInformation(
             "ESTADO DECISOR | Entrada={Entrada} | Intencao={Intencao} | Interpretada={Interpretada} | ResultadoDisponivel={ResultadoDisponivel}",
             entrada,
             intencao,
             instrucaoInterpretada,
             resultadoDisponivel);
+
+        if (intencao.Equals(
+                "internet:pesquisar",
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                resultadoDisponivel,
+                "sim",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult(
+                Registrar(
+                    ciclo,
+                    new DecisaoAgente
+                    {
+                        Acao = TipoAcaoAgente.Concluir,
+                        Ferramenta = "internet",
+                        Operacao = "pesquisar",
+                        Motivo = "resultado_da_pesquisa_disponivel"
+                    }));
+        }
+
+        if (intencao.Equals(
+                "internet:pesquisar",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult(
+                Registrar(
+                    ciclo,
+                    new DecisaoAgente
+                    {
+                        Acao = TipoAcaoAgente.ExecutarFerramenta,
+                        Ferramenta = "internet",
+                        Operacao = "pesquisar",
+                        Motivo = "pesquisa_externa_solicitada",
+                        Parametros = new Dictionary<string, string>
+                        {
+                            ["instrucao"] = instrucaoInterpretada
+                        }
+                    }));
+        }
 
         if (EhIntencaoTecnica(intencao))
         {
@@ -92,6 +150,10 @@ public sealed class Decisor : IDecisor
                 partes.Length > 1
                     ? partes[1].Trim()
                     : string.Empty;
+
+            ciclo.Adicionar(
+                "intencao_detectada",
+                string.Empty);
 
             return Task.FromResult(
                 Registrar(
@@ -127,30 +189,6 @@ public sealed class Decisor : IDecisor
                             ExtrairOperacao(intencao),
                         Motivo =
                             "intencao_conversacional"
-                    }));
-        }
-
-        var memoria =
-            _convocadorMemoria.EncontrarRelevante(
-                entrada);
-
-        if (memoria is not null)
-        {
-            ciclo.Adicionar(
-                "decisao:memoria_relevante",
-                memoria.Valor);
-
-            return Task.FromResult(
-                Registrar(
-                    ciclo,
-                    new DecisaoAgente
-                    {
-                        Acao =
-                            TipoAcaoAgente.Conversar,
-                        Ferramenta = "conversa",
-                        Operacao = "memoria",
-                        Motivo =
-                            "memoria_relevante_disponivel"
                     }));
         }
 
@@ -209,6 +247,11 @@ public sealed class Decisor : IDecisor
                 StringComparison.OrdinalIgnoreCase))
             return false;
 
+        if (intencao.Equals(
+                "internet:pesquisar",
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
         return intencao.Contains(':');
     }
 
@@ -234,6 +277,3 @@ public sealed class Decisor : IDecisor
             : "responder";
     }
 }
-
-
-

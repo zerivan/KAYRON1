@@ -1,4 +1,4 @@
-﻿namespace KAYRON.Engine;
+namespace KAYRON.Engine;
 
 public sealed class ModeloInteligenciaOptions
 {
@@ -11,5 +11,13 @@ public sealed class ModeloInteligenciaOptions
     public double Temperatura { get; set; } = 0.7;
 
     public string ApiKey { get; set; } = string.Empty;
+
+    public string ProjectId { get; set; } = string.Empty;
+
+    public string Url { get; set; } = "https://us-south.ml.cloud.ibm.com";
+
+
+
+
 }
 

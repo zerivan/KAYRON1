@@ -1,28 +1,23 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
 public sealed class HistoricoConversa
     : IHistoricoConversa
 {
-    private readonly List<MensagemConversa> _mensagens = [];
+    private const int LimiteMensagens = 40;
 
+    private readonly List<MensagemConversa> _mensagens = [];
     private readonly object _lock = new();
 
-    public void AdicionarUsuario(
-        string conteudo)
+    public void AdicionarUsuario(string conteudo)
     {
-        Adicionar(
-            "usuario",
-            conteudo);
+        Adicionar("usuario", conteudo);
     }
 
-    public void AdicionarAssistente(
-        string conteudo)
+    public void AdicionarAssistente(string conteudo)
     {
-        Adicionar(
-            "kayron",
-            conteudo);
+        Adicionar("kayron", conteudo);
     }
 
     public IReadOnlyCollection<MensagemConversa> Listar()
@@ -41,9 +36,7 @@ public sealed class HistoricoConversa
         }
     }
 
-    private void Adicionar(
-        string papel,
-        string conteudo)
+    private void Adicionar(string papel, string conteudo)
     {
         if (string.IsNullOrWhiteSpace(conteudo))
         {
@@ -52,12 +45,18 @@ public sealed class HistoricoConversa
 
         lock (_lock)
         {
-            _mensagens.Add(
-                new MensagemConversa
-                {
-                    Papel = papel,
-                    Conteudo = conteudo.Trim()
-                });
+            _mensagens.Add(new MensagemConversa
+            {
+                Papel = papel,
+                Conteudo = conteudo.Trim()
+            });
+
+            if (_mensagens.Count > LimiteMensagens)
+            {
+                _mensagens.RemoveRange(
+                    0,
+                    _mensagens.Count - LimiteMensagens);
+            }
         }
     }
 }

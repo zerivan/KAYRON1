@@ -1,4 +1,4 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
@@ -34,7 +34,7 @@ public sealed class ExecutorFerramentas
         if (string.IsNullOrWhiteSpace(nome))
         {
             return ResultadoFerramenta.Falha(
-                "O nome da ferramenta não foi informado.");
+                "O nome da ferramenta nÃ£o foi informado.");
         }
 
         var ferramenta =
@@ -43,7 +43,7 @@ public sealed class ExecutorFerramentas
         if (ferramenta is null)
         {
             return ResultadoFerramenta.Falha(
-                $"Ferramenta não encontrada: {nome}");
+                $"Ferramenta nÃ£o encontrada: {nome}");
         }
 
         var autorizacao =
@@ -52,9 +52,10 @@ public sealed class ExecutorFerramentas
                 argumentos,
                 operacaoSolicitada);
 
-        if (!autorizacao.Permitido)
+        var confirmacaoAutorizada = contexto.Obter("confirmacao_autorizada") == "sim" && contexto.Obter("confirmacao_ferramenta") == ferramenta.Nome && contexto.Obter("confirmacao_operacao") == (operacaoSolicitada ?? string.Empty);
+        if (!autorizacao.Permitido && !confirmacaoAutorizada)
         {
-            if (autorizacao.ExigeConfirmacao)
+            if (autorizacao.ExigeConfirmacao && !confirmacaoAutorizada)
             {
                 var pendente =
                     _confirmador.ObterPendente(contexto);
@@ -77,13 +78,13 @@ public sealed class ExecutorFerramentas
                         StringComparison.Ordinal))
                 {
                     return ResultadoFerramenta.Falha(
-                        $"CONFIRMAÇÃO NECESSÁRIA: {pendente.Motivo}" +
+                        $"CONFIRMAÃ‡ÃƒO NECESSÃRIA: {pendente.Motivo}" +
                         Environment.NewLine +
-                        $"ID DA CONFIRMAÇÃO: {pendente.Id}" +
+                        $"ID DA CONFIRMAÃ‡ÃƒO: {pendente.Id}" +
                         Environment.NewLine +
                         $"Ferramenta: {pendente.Ferramenta}" +
                         Environment.NewLine +
-                        $"Operação: {pendente.Operacao}" +
+                        $"OperaÃ§Ã£o: {pendente.Operacao}" +
                         Environment.NewLine +
                         $"Argumentos: {pendente.Argumentos}");
                 }
@@ -97,21 +98,21 @@ public sealed class ExecutorFerramentas
                         contexto);
 
                 return ResultadoFerramenta.Falha(
-                    $"CONFIRMAÇÃO NECESSÁRIA: {solicitacao.Motivo}" +
+                    $"CONFIRMAÃ‡ÃƒO NECESSÃRIA: {solicitacao.Motivo}" +
                     Environment.NewLine +
-                    $"ID DA CONFIRMAÇÃO: {solicitacao.Id}" +
+                    $"ID DA CONFIRMAÃ‡ÃƒO: {solicitacao.Id}" +
                     Environment.NewLine +
                     $"Ferramenta: {solicitacao.Ferramenta}" +
                     Environment.NewLine +
-                    $"Operação: {solicitacao.Operacao}" +
+                    $"OperaÃ§Ã£o: {solicitacao.Operacao}" +
                     Environment.NewLine +
                     $"Argumentos: {solicitacao.Argumentos}" +
                     Environment.NewLine +
-                    "Confirme explicitamente esta operação para continuar.");
+                    "Confirme explicitamente esta operaÃ§Ã£o para continuar.");
             }
 
             return ResultadoFerramenta.Falha(
-                $"OPERAÇÃO BLOQUEADA: {autorizacao.Motivo}");
+                $"OPERAÃ‡ÃƒO BLOQUEADA: {autorizacao.Motivo}");
         }
 
         try

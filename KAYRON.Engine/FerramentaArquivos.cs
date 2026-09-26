@@ -46,7 +46,9 @@ public sealed class FerramentaArquivos : IFerramenta
             2,
             StringSplitOptions.RemoveEmptyEntries);
 
-        var operacao = partes[0].ToLowerInvariant();
+        var operacao = partes[0]
+            .Trim('"', '“', '”', '\'', '‘', '’', '`', '[', ']', '(', ')', ':', ',', ';', '.', ' ')
+            .ToLowerInvariant();
 
         var caminho =
             partes.Length > 1

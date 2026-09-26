@@ -1,4 +1,4 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
@@ -7,11 +7,11 @@ public sealed class DetectorProjeto
 {
     private static readonly string[] Marcadores =
     {
-        ".sln",
-        ".slnx",
-        ".csproj",
-        ".fsproj",
-        ".vbproj",
+        "*.sln",
+        "*.slnx",
+        "*.csproj",
+        "*.fsproj",
+        "*.vbproj",
         "package.json",
         "Cargo.toml",
         "go.mod",

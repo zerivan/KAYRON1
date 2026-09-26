@@ -2,4 +2,6 @@
   <Project Path="KAYRON.Agent/KAYRON.Agent.csproj" />
   <Project Path="KAYRON.Core/KAYRON.Core.csproj" />
   <Project Path="KAYRON.Engine/KAYRON.Engine.csproj" />
+  <Project Path="KAYRON.MCP/KAYRON.MCP.csproj" />
+  <Project Path="KAYRON.UI/KAYRON.UI.csproj" />
 </Solution>

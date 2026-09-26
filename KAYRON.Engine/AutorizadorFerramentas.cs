@@ -63,6 +63,17 @@ public sealed class AutorizadorFerramentas
                     SomenteLeitura = true
                 },
 
+            "internet" =>
+                new PoliticaFerramenta
+                {
+                    Permitida = true,
+                    SomenteLeitura = true,
+                    OperacoesPermitidas =
+                    [
+                        "pesquisar"
+                    ]
+                },
+
             "processos" =>
                 new PoliticaFerramenta
                 {

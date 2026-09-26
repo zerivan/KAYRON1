@@ -16,10 +16,18 @@ public sealed class ProcessadorConfirmacao
         "confirma",
         "pode executar",
         "pode fazer",
-        "pode prosseguir",
         "pode continuar",
         "continue",
         "continuar",
+        "sim continue",
+        "sim, continue",
+        "vamos",
+        "vamos continuar",
+        "ok",
+        "ok continue",
+        "ok, continue",
+        "por favor",
+        "pode prosseguir",
         "execute",
         "executa",
         "pode"
@@ -35,10 +43,16 @@ public sealed class ProcessadorConfirmacao
         "cancele",
         "não pode",
         "nao pode",
-        "pare",
-        "parar",
         "não execute",
-        "nao execute"
+        "nao execute",
+        "não faça",
+        "nao faca",
+        "não continue",
+        "nao continue",
+        "espere",
+        "espera",
+        "pare",
+        "parar"
     };
 
     public ProcessadorConfirmacao(

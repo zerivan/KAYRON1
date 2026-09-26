@@ -48,6 +48,18 @@ public class MemoriaAprendidaPersistente : IMemoriaAprendidaPersistente
             memoria.Chave);
     }
 
+    public bool Remover(string chave)
+    {
+        if (string.IsNullOrWhiteSpace(chave) || !_dados.Remove(chave.Trim()))
+        {
+            return false;
+        }
+
+        Persistir();
+        _logger.LogDebug("Memória removida. Chave: {Chave}", chave);
+        return true;
+    }
+
     public KAYRON.Core.MemoriaAprendida? Recuperar(string chave)
     {
         if (string.IsNullOrWhiteSpace(chave))

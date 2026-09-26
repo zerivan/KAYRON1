@@ -1,4 +1,4 @@
-﻿using KAYRON.Core;
+using KAYRON.Core;
 
 namespace KAYRON.Engine;
 
@@ -41,7 +41,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
             return new ResultadoCicloCorrecao
             {
                 Sucesso = false,
-                Mensagem = "O diretório do projeto não foi informado."
+                Mensagem = "O diret?rio do projeto n?o foi informado."
             };
         }
 
@@ -52,7 +52,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
             return new ResultadoCicloCorrecao
             {
                 Sucesso = false,
-                Mensagem = $"Diretório não encontrado: {diretorio}"
+                Mensagem = $"Diret?rio n?o encontrado: {diretorio}"
             };
         }
 
@@ -70,7 +70,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
                 Sucesso = true,
                 ValidacaoPassou = true,
                 Tentativas = 0,
-                Mensagem = "O projeto já está válido. Nenhuma correção foi necessária."
+                Mensagem = "O projeto j? est? v?lido. Nenhuma corre??o foi necess?ria."
             };
         }
 
@@ -88,7 +88,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
                 Sucesso = false,
                 ValidacaoPassou = false,
                 Tentativas = 0,
-                Mensagem = "A validação falhou, mas nenhum erro estruturado foi encontrado."
+                Mensagem = "A valida??o falhou, mas nenhum erro estruturado foi encontrado."
             };
         }
 
@@ -117,7 +117,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
                 ValidacaoPassou = false,
                 Tentativas = 0,
                 Arquivo = analise.Arquivo,
-                Mensagem = "O erro foi identificado, mas o código correspondente não foi localizado."
+                Mensagem = "O erro foi identificado, mas o c?digo correspondente n?o foi localizado."
             };
         }
 
@@ -142,7 +142,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
                     ValidacaoPassou = false,
                     Tentativas = tentativas,
                     Arquivo = analise.Arquivo,
-                    Mensagem = "Não foi possível gerar uma alteração segura para o diagnóstico."
+                    Mensagem = "N?o foi poss?vel gerar uma altera??o segura para o diagn?stico."
                 };
             }
 
@@ -181,7 +181,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
                     Tentativas = tentativas,
                     Arquivo = correcao.Arquivo,
                     Backup = correcao.Backup,
-                    Mensagem = "Correção aplicada e validada com sucesso."
+                    Mensagem = "Corre??o aplicada e validada com sucesso."
                 };
             }
 
@@ -199,8 +199,8 @@ public sealed class CicloCorrecao : ICicloCorrecao
                 Arquivo = correcao.Arquivo,
                 Backup = correcao.Backup,
                 Mensagem = rollback
-                    ? "A correção foi aplicada, mas a validação falhou. O arquivo foi restaurado."
-                    : "A validação falhou e o rollback não pôde ser confirmado."
+                    ? "A corre??o foi aplicada, mas a valida??o falhou. O arquivo foi restaurado."
+                    : "A valida??o falhou e o rollback n?o p?de ser confirmado."
             };
         }
 
@@ -208,7 +208,7 @@ public sealed class CicloCorrecao : ICicloCorrecao
         {
             Sucesso = false,
             Tentativas = tentativas,
-            Mensagem = "O limite de tentativas de correção foi atingido."
+            Mensagem = "O limite de tentativas de corre??o foi atingido."
         };
     }
 
@@ -218,13 +218,13 @@ public sealed class CicloCorrecao : ICicloCorrecao
     {
         var resultado =
             await _projetoExecutor.ExecutarAsync(
-                diretorioProjeto,
                 "build",
+                diretorioProjeto,
                 cancellationToken);
 
         return (
             resultado.Sucesso,
-            resultado.Saida ?? string.Empty);
+            string.Join(Environment.NewLine, new[] { resultado.Saida, resultado.Erro }.Where(valor => !string.IsNullOrWhiteSpace(valor))));
     }
 
     private static async Task<bool> ExecutarRollbackAsync(
