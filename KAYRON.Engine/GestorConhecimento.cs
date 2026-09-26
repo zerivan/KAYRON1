@@ -44,6 +44,7 @@ public sealed class GestorConhecimento
         {
             var memoriaExistente = _memoriaAprendida
                 .Pesquisar(entrada, 3)
+                .Where(EhMemoriaUtilizavel)
                 .FirstOrDefault(m =>
                     string.Equals(m.Tipo, "conhecimento", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(m.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) &&
@@ -200,6 +201,22 @@ public sealed class GestorConhecimento
 
         return !marcadoresDeFalha.Any(marcador =>
             texto.Contains(marcador, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool EhMemoriaUtilizavel(KAYRON.Core.MemoriaAprendida memoria)
+    {
+        if (!string.Equals(memoria.Tipo, "conhecimento", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.Equals(memoria.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) ||
+            !memoria.Tags.Any(tag => string.Equals(tag, "verificado", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var referencia = memoria.AtualizadoEm > memoria.AprendidoEm
+            ? memoria.AtualizadoEm
+            : memoria.AprendidoEm;
+
+        return DateTime.UtcNow - referencia <= TimeSpan.FromDays(7);
     }
 
     private static bool TemConhecimentoRelevante(IContexto contexto)
