@@ -4,6 +4,7 @@ namespace KAYRON.Engine;
 
 public class MemoriaAprendida : IMemoriaAprendida
 {
+    private static readonly TimeSpan ValidadeConhecimento = TimeSpan.FromDays(7);
     private readonly Dictionary<string, KAYRON.Core.MemoriaAprendida> _dados = new(StringComparer.OrdinalIgnoreCase);
     private readonly IMemoriaAprendidaPersistente _memoriaPersistente;
     private readonly MemoriaPostgres _memoriaPostgres;
@@ -212,6 +213,17 @@ public class MemoriaAprendida : IMemoriaAprendida
     {
         if (!memoria.Tipo.Equals("conhecimento", StringComparison.OrdinalIgnoreCase))
             return true;
+
+        if (!string.Equals(memoria.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) ||
+            !memoria.Tags.Any(tag => string.Equals(tag, "verificado", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var referencia = memoria.AtualizadoEm > memoria.AprendidoEm
+            ? memoria.AtualizadoEm
+            : memoria.AprendidoEm;
+
+        if (DateTime.UtcNow - referencia > ValidadeConhecimento)
+            return false;
 
         var valor = memoria.Valor ?? string.Empty;
         var marcadoresInvalidos = new[]
