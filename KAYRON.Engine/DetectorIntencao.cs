@@ -13,6 +13,77 @@ public sealed class DetectorIntencao : IDetectorIntencao
 
         var normalizado = Normalizar(texto);
 
+        // A intenção explícita do turno atual tem prioridade sobre qualquer
+        // contexto ou intenção inferida anteriormente.
+        if (ContemAlgum(normalizado,
+                "pesquise",
+                "pesquisar",
+                "pesquisa",
+                "pesquise novamente",
+                "pesquisar novamente",
+                "nova pesquisa",
+                "faca uma pesquisa",
+                "faca nova pesquisa",
+                "quero pesquisar",
+                "quero que pesquise",
+                "pode pesquisar",
+                "procure na internet",
+                "procure na web",
+                "procure novamente",
+                "busque na internet",
+                "busque na web",
+                "busque novamente",
+                "consulte na internet",
+                "consulte na web",
+                "pesquise na internet",
+                "pesquise na web",
+                "qual e o atual",
+                "quem e o atual",
+                "preco atual",
+                "cotacao atual",
+                "cotacao do dolar",
+                "cotacao dolar",
+                "valor do dolar",
+                "dolar hoje",
+                "dolar agora",
+                "preco do dolar",
+                "noticias de hoje"))
+        {
+            return new IntencaoDetectada
+            {
+                Ferramenta = "internet",
+                Operacao = "pesquisar",
+                Confianca = 1.0,
+                Identificada = true,
+                Evidencia = texto
+            };
+        }
+
+        // Se o turno atual é uma continuação explícita de uma pesquisa,
+        // preserva a intenção de pesquisa sem reutilizar a resposta anterior
+        // como se ela fosse a nova intenção.
+        if (string.Equals(
+                contexto.Obter("continuacao_origem_internet"),
+                "sim",
+                StringComparison.OrdinalIgnoreCase) &&
+            ContemAlgum(normalizado,
+                "sobre isso",
+                "sobre isto",
+                "sobre esse assunto",
+                "sobre este assunto",
+                "a respeito disso",
+                "a respeito disto"))
+        {
+            return new IntencaoDetectada
+            {
+                Ferramenta = "internet",
+                Operacao = "pesquisar",
+                Confianca = 0.99,
+                Identificada = true,
+                Evidencia = texto
+            };
+        }
+
         if (ContemAlgum(normalizado,
                 "corrija os erros",
                 "corrigir os erros",
@@ -34,38 +105,6 @@ public sealed class DetectorIntencao : IDetectorIntencao
                 Ferramenta = "autocorrecao",
                 Operacao = "autocorrigir",
                 Confianca = 0.98,
-                Identificada = true,
-                Evidencia = texto
-            };
-        }
-
-        if (ContemAlgum(normalizado,
-                "pesquise",
-                "pesquisar",
-                "pesquisa",
-                "procure na internet",
-                "procure na web",
-                "pesquise na internet",
-                "pesquise na web",
-                "busque na internet",
-                "busque na web",
-                "qual e o atual",
-                "quem e o atual",
-                "preco atual",
-                "cotacao atual",
-                "cotacao do dolar",
-                "cotacao dolar",
-                "valor do dolar",
-                "dolar hoje",
-                "dolar agora",
-                "preco do dolar",
-                "noticias de hoje"))
-        {
-            return new IntencaoDetectada
-            {
-                Ferramenta = "internet",
-                Operacao = "pesquisar",
-                Confianca = 0.97,
                 Identificada = true,
                 Evidencia = texto
             };
@@ -123,15 +162,7 @@ public sealed class DetectorIntencao : IDetectorIntencao
             @"(?<![A-Za-z0-9_])(\d+(?:[.,]\d+)?)\s*([+\-*/x×÷])\s*(\d+(?:[.,]\d+)?)(?![A-Za-z0-9_])",
             RegexOptions.CultureInvariant);
 
-        if (expressao.Success)
-            return true;
-
-        return ContemAlgum(texto,
-                "quanto e",
-                "quanto eh",
-                "calcule",
-                "calcular") &&
-            expressao.Success;
+        return expressao.Success;
     }
 
     private static bool ContemAlgum(
@@ -140,9 +171,10 @@ public sealed class DetectorIntencao : IDetectorIntencao
     {
         foreach (var termo in termos)
         {
-            if (texto.Contains(
-                    termo,
-                    StringComparison.OrdinalIgnoreCase))
+            if (Regex.IsMatch(
+                    texto,
+                    $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(termo)}(?![\p{{L}}\p{{N}}])",
+                    RegexOptions.CultureInvariant | RegexOptions.IgnoreCase))
             {
                 return true;
             }
