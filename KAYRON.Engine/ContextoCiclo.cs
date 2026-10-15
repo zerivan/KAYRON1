@@ -52,10 +52,6 @@ public sealed class ContextoCiclo : IContexto
             valor ?? string.Empty;
 
         _dados[chave] = valorSeguro;
-
-        _fonte.Adicionar(
-            chave,
-            valorSeguro);
     }
 
     public string? Obter(
@@ -145,6 +141,11 @@ public sealed class ContextoCiclo : IContexto
 
         foreach (var item in _dados)
         {
+            if (EhEstadoTransitório(item.Key))
+            {
+                continue;
+            }
+
             destino.Adicionar(
                 item.Key,
                 item.Value);
@@ -162,16 +163,7 @@ public sealed class ContextoCiclo : IContexto
         var chaves =
             new[]
             {
-                "mensagem_atual",
-                "instrucao_resolvida",
-                "instrucao_interpretada",
                 "contexto_conversacional",
-                "idioma_codigo",
-                "idioma_nome",
-                "idioma_confianca",
-                "intencao_detectada",
-                "intencao_confianca",
-                "intencao_evidencia",
                 "ultima_resposta",
                 "ultima_origem_ferramenta",
                 "ultima_origem_operacao",
@@ -180,9 +172,6 @@ public sealed class ContextoCiclo : IContexto
                 "arquivo_projeto",
                 "solucao",
                 "tipo_projeto",
-                "decisao:memoria:encontrada",
-                "decisao:memoria:chave",
-                "decisao:memoria:valor",
                 "memoria:instrucao",
                 "memoria:ultima_instrucao",
                 "memoria:ultima_intencao",
@@ -199,6 +188,36 @@ public sealed class ContextoCiclo : IContexto
                 _dados[chave] = valor;
             }
         }
+    }
+
+    private static bool EhEstadoTransitório(
+        string chave)
+    {
+        if (chave.StartsWith(
+                "ciclo:",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return chave.Equals("mensagem_atual", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("entrada_original", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("instrucao_resolvida", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("instrucao_interpretada", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("idioma_codigo", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("idioma_nome", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("idioma_confianca", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("intencao_detectada", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("intencao_confianca", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("intencao_evidencia", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("continuacao_origem_internet", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("correcao_resposta:ativa", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("correcao_resposta:pergunta_original", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("correcao_resposta:resposta_contestada", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("correcao_resposta:memoria_bloqueada", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("decisao:memoria:encontrada", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("decisao:memoria:chave", StringComparison.OrdinalIgnoreCase)
+            || chave.Equals("decisao:memoria:valor", StringComparison.OrdinalIgnoreCase);
     }
 
     private List<RegistroDecisao> CarregarHistorico(

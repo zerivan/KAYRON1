@@ -107,30 +107,87 @@ public sealed class Orquestrador : IOrquestrador
                 "ciclo:decisao_atual",
                 decisao.Acao.ToString());
 
-            if (string.Equals(decisao.Ferramenta, "matematica", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(decisao.Operacao, "calcular", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(decisao.Ferramenta, "matematica", StringComparison.OrdinalIgnoreCase))
             {
-                var resultadoMatematico = CalcularExpressao(entrada);
-
-                if (resultadoMatematico is null)
+                if (string.Equals(decisao.Operacao, "explicar", StringComparison.OrdinalIgnoreCase))
                 {
+                    var evidenciaMatematica =
+                        ciclo.Obter("intencao_evidencia");
+
+                    var expressaoParaExplicar =
+                        string.IsNullOrWhiteSpace(evidenciaMatematica)
+                            ? entrada
+                            : evidenciaMatematica;
+
+                    var resultadoExplicacao =
+                        ResolverExpressao(expressaoParaExplicar);
+
+                    var explicador =
+                        new ExplicadorMatematico();
+
+                    var explicacao =
+                        explicador.Explicar(resultadoExplicacao);
+
+                    ciclo.RegistrarDecisao(
+                        "EXPLICAR",
+                        "matematica",
+                        "explicar",
+                        explicacao.Texto,
+                        explicacao.Valido);
+
                     return Finalizar(
                         ciclo,
-                        "Não consegui interpretar a expressão matemática.",
-                        "ERRO_MATEMATICA");
+                        explicacao.Texto,
+                        explicacao.Valido
+                            ? "MATEMATICA"
+                            : "ERRO_MATEMATICA");
                 }
 
-                ciclo.RegistrarDecisao(
-                    "CALCULAR",
-                    "matematica",
-                    "calcular",
-                    resultadoMatematico,
-                    true);
+                if (string.Equals(decisao.Operacao, "calcular", StringComparison.OrdinalIgnoreCase))
+                {
+                    var resultadoNovo = ResolverExpressao(entrada);
 
-                return Finalizar(
-                    ciclo,
-                    $"O resultado é {resultadoMatematico}.",
-                    "MATEMATICA");
+                    if (resultadoNovo.Valido)
+                    {
+                        var respostaMatematica = resultadoNovo.Etapas.Count == 0
+                            ? $"Resultado: {resultadoNovo.ValorFinal.ToString("0.############################", CultureInfo.GetCultureInfo("pt-BR"))}"
+                            : $"Cálculo:\n{string.Join("\n", resultadoNovo.Etapas)}\nResultado: {resultadoNovo.ValorFinal.ToString("0.############################", CultureInfo.GetCultureInfo("pt-BR"))}";
+
+                        ciclo.RegistrarDecisao(
+                            "CALCULAR",
+                            "matematica",
+                            "calcular",
+                            respostaMatematica,
+                            true);
+
+                        return Finalizar(
+                            ciclo,
+                            respostaMatematica,
+                            "MATEMATICA");
+                    }
+
+                    var resultadoLegado = CalcularExpressao(entrada);
+
+                    if (resultadoLegado is null)
+                    {
+                        return Finalizar(
+                            ciclo,
+                            resultadoNovo.Erro ?? "Não consegui interpretar a expressão matemática.",
+                            "ERRO_MATEMATICA");
+                    }
+
+                    ciclo.RegistrarDecisao(
+                        "CALCULAR",
+                        "matematica",
+                        "calcular",
+                        resultadoLegado,
+                        true);
+
+                    return Finalizar(
+                        ciclo,
+                        $"O resultado é {resultadoLegado}.",
+                        "MATEMATICA");
+                }
             }
 
             if (decisao.Acao ==
@@ -259,6 +316,13 @@ public sealed class Orquestrador : IOrquestrador
                         "conversa:responder");
                 }
 
+                _logger.LogInformation(
+                    "ORQUESTRADOR -> MODELO | Intencao={Intencao} | Decisao={Decisao} | ResultadoDisponivel={ResultadoDisponivel} | EntradaLen={Len}",
+                    ciclo.Obter("intencao_detectada"),
+                    $"{decisao.Ferramenta}:{decisao.Operacao}",
+                    ciclo.Obter("ciclo:resultado_disponivel"),
+                    entrada.Length);
+
                 var resposta =
                     await _modeloInteligencia.GerarAsync(
                         instrucao,
@@ -367,6 +431,12 @@ public sealed class Orquestrador : IOrquestrador
                 "ciclo:operacao_atual",
                 decisao.Operacao);
 
+            _logger.LogInformation(
+                "ORQUESTRADOR -> EXECUTAR_FERRAMENTA | Ferramenta={Ferramenta} | Operacao={Operacao} | ArgumentosLen={Len}",
+                ferramenta.Nome,
+                decisao.Operacao,
+                argumentos?.Length ?? 0);
+
             var resultadoFerramenta =
                 await _executor.ExecutarAsync(
                     ferramenta.Nome,
@@ -374,6 +444,22 @@ public sealed class Orquestrador : IOrquestrador
                     ciclo,
                     cancellationToken,
                     decisao.Operacao);
+
+            var resultadoTextoLog =
+                resultadoFerramenta.Conteudo ?? string.Empty;
+
+            var contemUrls =
+                resultadoTextoLog.Contains("URL:", StringComparison.OrdinalIgnoreCase) ||
+                resultadoTextoLog.Contains("http://", StringComparison.OrdinalIgnoreCase) ||
+                resultadoTextoLog.Contains("https://", StringComparison.OrdinalIgnoreCase);
+
+            _logger.LogInformation(
+                "FERRAMENTA RESULT | Ferramenta={Ferramenta} | Operacao={Operacao} | Sucesso={Sucesso} | ResultadoLen={Len} | ContemUrls={ContemUrls}",
+                ferramenta.Nome,
+                decisao.Operacao,
+                resultadoFerramenta.Sucesso,
+                resultadoTextoLog.Length,
+                contemUrls);
 
             var conteudoResultado =
                 resultadoFerramenta.Sucesso
@@ -487,6 +573,28 @@ if (string.Equals(
                     ciclo,
                     conteudoCorrigido,
                     "CORRECAO_VERIFICADA");
+            }
+
+            if (string.Equals(
+                    ferramenta.Nome,
+                    "internet",
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    decisao.Operacao,
+                    "pesquisar",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                ciclo.RegistrarDecisao(
+                    "SINTETIZAR_PESQUISA",
+                    ferramenta.Nome,
+                    decisao.Operacao,
+                    conteudoResultado,
+                    true);
+
+                return Finalizar(
+                    ciclo,
+                    conteudoResultado,
+                    "SINTETIZAR_PESQUISA");
             }
 
             instrucao =
@@ -657,40 +765,201 @@ if (string.Equals(
                    "Fonte: pesquisa web",
                    StringComparison.OrdinalIgnoreCase);
     }
-    private static string? CalcularExpressao(string entrada)
+    private static ResultadoMatematico ResolverExpressao(string expressaoOriginal)
     {
-        var match = Regex.Match(
-            entrada,
-            @"(?<![A-Za-z0-9_])(\d+(?:[.,]\d+)?)\s*([+\-*/x×÷])\s*(\d+(?:[.,]\d+)?)(?![A-Za-z0-9_])",
-            RegexOptions.CultureInvariant);
+        var lexer = new LexerMatematico();
+        var parser = new ParserMatematico();
+        var motor = new MotorMatematico();
 
-        if (!match.Success)
-            return null;
+        var resultadoLexer = lexer.Tokenizar(expressaoOriginal);
 
-        var cultura = CultureInfo.GetCultureInfo("pt-BR");
-        if (!decimal.TryParse(match.Groups[1].Value.Replace('.', ','), NumberStyles.Number, cultura, out var esquerda) ||
-            !decimal.TryParse(match.Groups[3].Value.Replace('.', ','), NumberStyles.Number, cultura, out var direita))
-            return null;
-
-        var operador = match.Groups[2].Value;
-        decimal resultado;
-
-        switch (operador)
+        if (!resultadoLexer.Valido)
         {
-            case "+": resultado = esquerda + direita; break;
-            case "-": resultado = esquerda - direita; break;
-            case "*":
-            case "x":
-            case "×": resultado = esquerda * direita; break;
-            case "/":
-            case "÷":
-                if (direita == 0) return "Erro: divisão por zero.";
-                resultado = esquerda / direita;
-                break;
-            default: return null;
+            return new ResultadoMatematico(
+                0m,
+                new List<string>(),
+                expressaoOriginal,
+                false,
+                resultadoLexer.MensagemErro ?? "Expressão matemática inválida.");
         }
 
-        return resultado.ToString("0.############################", cultura);
+        var resultadoParser = parser.Parse(resultadoLexer);
+
+        if (!resultadoParser.Valido || resultadoParser.Raiz is null)
+        {
+            return new ResultadoMatematico(
+                0m,
+                new List<string>(),
+                expressaoOriginal,
+                false,
+                resultadoParser.MensagemErro ?? "Sintaxe matemática inválida.");
+        }
+
+        return motor.Calcular(
+            resultadoParser.Raiz,
+            expressaoOriginal);
+    }
+
+    private static string? CalcularExpressao(string entrada)
+    {
+        var cultura = CultureInfo.GetCultureInfo("pt-BR");
+        var formula = entrada.Trim();
+        var variaveis = new Dictionary<string, decimal>(
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (Match atribuicao in Regex.Matches(
+                     formula,
+                     @"\b([A-Za-z])\s*=\s*(\d+(?:[.,]\d+)?)",
+                     RegexOptions.CultureInvariant))
+        {
+            if (!decimal.TryParse(
+                    atribuicao.Groups[2].Value.Replace('.', ','),
+                    NumberStyles.Number,
+                    cultura,
+                    out var valor))
+                return null;
+
+            variaveis[atribuicao.Groups[1].Value] = valor;
+        }
+
+        string? nomeResultado = null;
+
+        if (variaveis.Count > 0)
+        {
+            formula = Regex.Replace(
+                formula,
+                @"\b[A-Za-z]\s*=\s*\d+(?:[.,]\d+)?\s*[,;]?",
+                string.Empty,
+                RegexOptions.CultureInvariant);
+
+            var atribuicaoResultado = Regex.Match(
+                formula,
+                @"^\s*([A-Za-z])\s*=\s*(.+?)\s*$",
+                RegexOptions.CultureInvariant);
+
+            if (atribuicaoResultado.Success)
+            {
+                nomeResultado = atribuicaoResultado.Groups[1].Value;
+                formula = atribuicaoResultado.Groups[2].Value;
+            }
+
+            foreach (var variavel in variaveis)
+            {
+                formula = Regex.Replace(
+                    formula,
+                    $@"\b{Regex.Escape(variavel.Key)}\b",
+                    variavel.Value.ToString(
+                        "0.############################",
+                        cultura),
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+
+            formula = formula.Trim().Trim(',', ';');
+        }
+
+        var matches = Regex.Matches(
+            formula,
+            @"(?<![A-Za-z0-9_])(\d+(?:[.,]\d+)?)(?:\s*([+\-*/x×÷])\s*(\d+(?:[.,]\d+)?))+",
+            RegexOptions.CultureInvariant);
+
+        if (matches.Count != 1)
+            return null;
+
+        var expressao = matches[0].Value;
+        var numeros = Regex.Matches(
+            expressao,
+            @"\d+(?:[.,]\d+)?",
+            RegexOptions.CultureInvariant);
+
+        var operadores = Regex.Matches(
+            expressao,
+            @"[+\-*/x×÷]",
+            RegexOptions.CultureInvariant);
+
+        if (numeros.Count == 0 || operadores.Count != numeros.Count - 1)
+            return null;
+
+        var valores = new List<decimal>();
+        foreach (Match numero in numeros)
+        {
+            if (!decimal.TryParse(
+                    numero.Value.Replace('.', ','),
+                    NumberStyles.Number,
+                    cultura,
+                    out var valor))
+                return null;
+
+            valores.Add(valor);
+        }
+
+        var operadoresRestantes = new List<string>();
+        var valoresRestantes = new List<decimal> { valores[0] };
+        var etapas = new List<string>();
+
+        for (var i = 0; i < operadores.Count; i++)
+        {
+            var operador = operadores[i].Value;
+            var direita = valores[i + 1];
+
+            if (operador is "*" or "x" or "×" or "/" or "÷")
+            {
+                var indice = valoresRestantes.Count - 1;
+                var esquerda = valoresRestantes[indice];
+
+                if (operador is "/" or "÷")
+                {
+                    if (direita == 0)
+                        return "Erro: divisão por zero.";
+
+                    valoresRestantes[indice] = esquerda / direita;
+                }
+                else
+                {
+                    valoresRestantes[indice] = esquerda * direita;
+                }
+
+                etapas.Add(
+                    $"{esquerda.ToString("0.############################", cultura)} {operador} {direita.ToString("0.############################", cultura)} = {valoresRestantes[indice].ToString("0.############################", cultura)}");
+            }
+            else
+            {
+                operadoresRestantes.Add(operador);
+                valoresRestantes.Add(direita);
+            }
+        }
+
+        var resultado = valoresRestantes[0];
+
+        for (var i = 0; i < operadoresRestantes.Count; i++)
+        {
+            var esquerda = resultado;
+            var direita = valoresRestantes[i + 1];
+
+            switch (operadoresRestantes[i])
+            {
+                case "+": resultado += direita; break;
+                case "-": resultado -= direita; break;
+                default: return null;
+            }
+
+            etapas.Add(
+                $"{esquerda.ToString("0.############################", cultura)} {operadoresRestantes[i]} {direita.ToString("0.############################", cultura)} = {resultado.ToString("0.############################", cultura)}");
+        }
+
+        var resultadoFormatado =
+            resultado.ToString("0.############################", cultura);
+
+        var variaveisTexto = variaveis.Count > 0
+            ? $"Variáveis: {string.Join(", ", variaveis.Select(v => $"{v.Key} = {v.Value.ToString("0.############################", cultura)}"))}\n"
+            : string.Empty;
+
+        var resultadoTexto = string.IsNullOrWhiteSpace(nomeResultado)
+            ? $"Resultado: {resultadoFormatado}"
+            : $"{nomeResultado} = {resultadoFormatado}";
+
+        return etapas.Count == 0
+            ? resultadoFormatado
+            : $"{variaveisTexto}Cálculo:\n{string.Join("\n", etapas)}\n{resultadoTexto}";
     }
 
     private static bool EhSaudacao(string entrada)

@@ -11,16 +11,17 @@ public sealed class EmbeddingMemoriaLocal : IEmbeddingMemoria
 
     public float[] Gerar(string texto)
     {
-        var gerador = Gerador.Value.GetAwaiter().GetResult();
-        var embedding = gerador.GenerateEmbeddingAsync(texto).GetAwaiter().GetResult();
-        return embedding.Vector.ToArray();
+        // Compatibilidade síncrona mínima: delega para a versão assíncrona.
+        return GerarAsync(texto).GetAwaiter().GetResult();
     }
 
-    public Task<float[]> GerarAsync(
+    public async Task<float[]> GerarAsync(
         string texto,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(Gerar(texto));
+        var gerador = await Gerador.Value.ConfigureAwait(false);
+        var embedding = await gerador.GenerateEmbeddingAsync(texto).ConfigureAwait(false);
+        return embedding.Vector.ToArray();
     }
 }

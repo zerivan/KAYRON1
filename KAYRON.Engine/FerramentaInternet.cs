@@ -8,11 +8,16 @@ public sealed class FerramentaInternet : IFerramenta
 {
     private const string Endpoint = "https://www.bing.com/search";
     private readonly PesquisaWeb _pesquisaWeb;
+    private readonly DeepSearch _deepSearch;
 
-    public FerramentaInternet(PesquisaWeb pesquisaWeb)
+    public FerramentaInternet(
+        PesquisaWeb pesquisaWeb,
+        DeepSearch deepSearch)
     {
         ArgumentNullException.ThrowIfNull(pesquisaWeb);
+        ArgumentNullException.ThrowIfNull(deepSearch);
         _pesquisaWeb = pesquisaWeb;
+        _deepSearch = deepSearch;
     }
 
     public string Nome => "internet";
@@ -65,38 +70,26 @@ public sealed class FerramentaInternet : IFerramenta
                     $"D\u00f3lar comercial \u2014 compra: R$ {valor.Compra:N4} | venda: R$ {valor.Venda:N4} | atualizado em {valor.DataHora:dd/MM/yyyy HH:mm:ss}.\nFonte oficial: Banco Central do Brasil.");
             }
 
-            var resultados = await _pesquisaWeb.PesquisarAsync(
-                consulta,
-                10,
+            contexto.Adicionar(
+                "intencao_detectada",
+                "internet:pesquisar");
+
+            var sintese = await _deepSearch.GerarAsync(
+                new Instrucao
+                {
+                    Conteudo = consulta
+                },
+                contexto,
                 cancellationToken);
 
-            if (resultados.Count == 0)
+            if (string.IsNullOrWhiteSpace(sintese.Conteudo))
             {
                 return ResultadoFerramenta.Falha(
-                    "A pesquisa web n\u00e3o retornou resultados utiliz\u00e1veis.");
-            }
-
-            var linhas = new List<string>
-            {
-                $"Pesquisa na Internet: {consulta}",
-                "Fonte: pesquisa web",
-                string.Empty
-            };
-
-            for (var indice = 0; indice < resultados.Count; indice++)
-            {
-                var resultado = resultados[indice];
-                linhas.Add($"[{indice + 1}] {resultado.Titulo}");
-                linhas.Add($"URL: {resultado.Url}");
-                if (!string.IsNullOrWhiteSpace(resultado.Trecho))
-                {
-                    linhas.Add($"Resumo: {resultado.Trecho}");
-                }
-                linhas.Add(string.Empty);
+                    "A pesquisa web foi executada, mas não foi possível produzir uma síntese factual suficiente.");
             }
 
             return ResultadoFerramenta.Ok(
-                string.Join(Environment.NewLine, linhas));
+                sintese.Conteudo.Trim());
         }
         catch (OperationCanceledException)
         {

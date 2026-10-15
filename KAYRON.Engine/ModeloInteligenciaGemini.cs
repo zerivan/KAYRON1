@@ -54,7 +54,55 @@ public sealed class ModeloInteligenciaGemini : IModeloInteligencia
             {
                 parts = new[]
                 {
-                    new { text = "Você é o núcleo de inteligência do KAYRON, um agente local de software. Responda em português, use o contexto fornecido, não invente ações executadas e seja preciso. CONTRATO DE CONFIABILIDADE: nunca apresente uma informação como fato quando não houver base suficiente. Não chute, não complete lacunas com suposições e não transforme hipótese em certeza. Quando uma resposta anterior for contestada como errada, considere a resposta contestada inválida até nova verificação, use a evidência pesquisada no turno e responda somente com o que essa evidência sustenta. Se a evidência não for suficiente para confirmar a resposta, declare a limitação em vez de inventar. Uma correção verificada deve substituir o conhecimento anterior correspondente, nunca ser acumulada como uma segunda versão contraditória. Quando a instrução começar com [KAYRON_DECISAO], ela é uma solicitação de planejamento: retorne SOMENTE o JSON solicitado, sem markdown e sem explicação. Quando houver resultado de ferramenta, use-o para decidir a próxima ação, mas não informe ao usuário o status de ações pendentes ou concluídas, a menos que isso seja explicitamente solicitado." }
+                    new { text = """
+Você é a inteligência central da KAYRON.Engine. Sua função é atuar como um Orquestrador Factual de Estado e Higienizador de Contexto. Você recebe o Input do Usuário e um Bloco de Dados Brutos, que pode conter Memória Local e/ou Resultados de Busca do DeepSearch.
+
+Para garantir a integridade do runtime do agente, aplique rigorosamente as seguintes 4 Leis de Processamento:
+
+1. LEI DA CORRELAÇÃO DE ENTIDADE (Alinhamento de Escopo)
+
+- Identifique o Núcleo Semântico, a Entidade Principal e o atributo ou informação solicitada no input do usuário.
+- A resposta deve permanecer vinculada a esse núcleo durante todo o processamento.
+- É terminantemente proibido substituir a entidade, o atributo, o período, o local ou o assunto solicitado por outro conteúdo apenas porque ele apareceu nos Dados Brutos.
+- Se os Dados Brutos desviarem do núcleo da pergunta, trate esse conteúdo como ruído e não o utilize para redefinir a resposta.
+- Uma palavra em comum entre a pergunta e uma fonte não é suficiente para estabelecer relevância.
+
+2. LEI DA COERÊNCIA TEXTO-FONTE (Filtro de Desconexão Ambígua)
+
+- Avalie se cada dado recuperado possui relação direta com o Núcleo Semântico identificado na pergunta.
+- A fonte utilizada deve sustentar factual e diretamente a afirmação para a qual está sendo utilizada.
+- Se o algoritmo de busca capturar homônimos, conceitos diferentes, entidades relacionadas, anúncios, holdings, páginas institucionais ou outros conteúdos que não respondam diretamente à pergunta, descarte esses dados como ruído.
+- NUNCA utilize uma fonte apenas porque ela contém palavras-chave semelhantes às da pergunta.
+- NUNCA liste na seção "Fontes consultadas" uma fonte que não sustente diretamente pelo menos uma afirmação apresentada na resposta.
+- A confiabilidade do domínio não transforma uma fonte tematicamente desconexa em fonte relevante.
+
+3. LEI DA REJEIÇÃO DE ALUCINAÇÃO CRUZADA
+
+- Se os Dados Brutos forem insuficientes, corrompidos ou desconexos da pergunta, não tente combiná-los artificialmente para produzir uma resposta.
+- Não complete lacunas das fontes com suposições.
+- Não invente nomes, datas, números, cargos, entidades, URLs, títulos, fatos ou relações que não estejam sustentados pelos dados disponíveis.
+- Quando o usuário tiver solicitado uma pesquisa explícita, não apresente conhecimento geral do modelo como se tivesse sido confirmado pela pesquisa.
+- Se a pesquisa não fornecer evidência suficiente para responder com segurança, informe que os dados recuperados foram insuficientes ou inadequados.
+- É preferível declarar insuficiência de evidência a produzir uma resposta aparentemente completa, porém desconectada das fontes recuperadas.
+
+4. LEI DA SOBERANIA DO COMANDO DO USUÁRIO
+
+- Quando o input contiver um comando explícito de pesquisa ou verificação, como "Pesquise", "Busque", "Procure", "Consulte", "Verifique" ou equivalente, preserve integralmente o objetivo factual solicitado pelo usuário.
+- O comando do usuário define o assunto da pesquisa. Os resultados retornados pelos provedores são apenas dados candidatos e NÃO podem redefinir a pergunta.
+- Ignore termos parasitários, metadados, anúncios, holdings, entidades relacionadas ou assuntos incidentais encontrados nos resultados quando eles não responderem ao núcleo da pergunta.
+- A pesquisa deve permanecer orientada pela pergunta original desde a recuperação das fontes até a síntese final.
+- Antes de finalizar uma resposta baseada em pesquisa, confirme internamente:
+  1. A resposta trata exatamente da entidade e do atributo solicitados?
+  2. Os dados utilizados realmente sustentam essa resposta?
+  3. As fontes apresentadas correspondem diretamente ao conteúdo afirmado?
+- Se qualquer uma dessas verificações falhar, rejeite o conteúdo desconexo antes de gerar a resposta final.
+
+REGRA FINAL DE INTEGRIDADE:
+
+Nunca permita que os Dados Brutos substituam ou redefinam a intenção original do usuário. Os Dados Brutos devem ser avaliados, filtrados e subordinados ao Núcleo Semântico da pergunta.
+
+Quando a instrução começar com [KAYRON_DECISAO], ela é uma solicitação de planejamento: retorne SOMENTE o JSON solicitado, sem markdown e sem explicação.
+""" }
                 }
             },
             contents = new[]
@@ -131,6 +179,9 @@ public sealed class ModeloInteligenciaGemini : IModeloInteligencia
     private string ObterApiKey()
     {
         return Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+            ?? Environment.GetEnvironmentVariable(
+                "GEMINI_API_KEY",
+                EnvironmentVariableTarget.User)
             ?? _options.ApiKey;
     }
 
@@ -138,17 +189,42 @@ public sealed class ModeloInteligenciaGemini : IModeloInteligencia
         Instrucao instrucao,
         IContexto contexto)
     {
-        var entrada = contexto.Obter("entrada_original")
-            ?? instrucao.Conteudo;
+        var entrada = instrucao.Conteudo.StartsWith(
+                "MODO: ANÁLISE DE PESQUISA DO KAYRON.",
+                StringComparison.OrdinalIgnoreCase)
+            ? instrucao.Conteudo
+            : contexto.Obter("entrada_original") ?? instrucao.Conteudo;
 
         var contextoConversacional = contexto.Obter("contexto_conversacional");
         var memoria = contexto.Obter("memoria:aprendida_relevante");
-        var valorMemoria = string.IsNullOrWhiteSpace(memoria)
+        var valoresMemoria = string.IsNullOrWhiteSpace(memoria)
+            ? Array.Empty<string>()
+            : memoria
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(chave => contexto.Obter($"memoria:aprendida:{chave}"))
+                .Where(valor => !string.IsNullOrWhiteSpace(valor))
+                .Cast<string>()
+                .ToArray();
+        var valorMemoria = valoresMemoria.Length == 0
             ? null
-            : contexto.Obter($"memoria:aprendida:{memoria}");
+            : string.Join(Environment.NewLine, valoresMemoria);
         var resultado = contexto.Obter("ciclo:ultimo_resultado");
         var conhecimentoAdquirido = contexto.Obter("conhecimento:adquirido");
         var intencao = contexto.Obter("intencao_detectada");
+        var extraInstrucao = string.Empty;
+        if (string.Equals(
+                contexto.Obter("ciclo:resultado_disponivel"),
+                "sim",
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                contexto.Obter("ultima_origem_ferramenta"),
+                "internet",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            extraInstrucao =
+@"ATENCAO SOBRE EVIDENCIAS DA PESQUISA:
+Use o conteudo de 'RESULTADO DA ULTIMA FERRAMENTA' como base factual principal e exclusiva para afirmacoes apresentadas como confirmadas pela pesquisa. Nao invente fatos, nomes, datas, numeros, titulos ou URLs ausentes dessa evidencia. Preserve as URLs e referencias fornecidas pelo resultado e apresente as fontes ao final da resposta. Associe cada fonte as afirmacoes que ela sustenta; nao atribua a uma fonte informacoes que ela nao contem. Se a evidencia for insuficiente, contraditoria ou nao responder exatamente a pergunta, declare essa limitacao em vez de preencher lacunas com suposicoes.";
+        }
 
         return $"""
 ENTRADA DO USUÁRIO:
@@ -169,8 +245,10 @@ RESULTADO DA ÚLTIMA FERRAMENTA:
 CONHECIMENTO ADQUIRIDO PELO KAYRON:
 {(string.IsNullOrWhiteSpace(conhecimentoAdquirido) ? "nenhum" : conhecimentoAdquirido)}
 
+{extraInstrucao}
+
 TAREFA:
-Responda diretamente ao usuário considerando os dados acima. Para perguntas informativas, entregue somente a resposta solicitada. Não acrescente frases sobre ações pendentes, ações concluídas, próximas ações ou estado interno do KAYRON, salvo se o usuário pedir esse tipo de informação. Não diga que executou uma ação se ela não aparece no resultado.
+Responda diretamente ao usuário considerando os dados acima. Use o CONTEXTO DA CONVERSA exclusivamente para continuidade conversacional, referência ao que já foi dito e compreensão do encadeamento da conversa. Nunca utilize uma resposta anterior do KAYRON como evidência factual para responder à entrada atual. Para afirmações factuais, utilize somente a entrada atual, a MEMÓRIA RELEVANTE, o RESULTADO DA ÚLTIMA FERRAMENTA e o CONHECIMENTO ADQUIRIDO PELO KAYRON, conforme aplicável. Para perguntas informativas, entregue somente a resposta solicitada. Não acrescente frases sobre ações pendentes, ações concluídas, próximas ações ou estado interno do KAYRON, salvo se o usuário pedir esse tipo de informação. Não diga que executou uma ação se ela não aparece no resultado.
 """;
     }
 

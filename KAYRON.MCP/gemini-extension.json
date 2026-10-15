@@ -1,0 +1,14 @@
+{
+  "name": "kayron",
+  "version": "1.0.0",
+  "description": "Agente de engenharia local KAYRON via Model Context Protocol.",
+  "mcpServers": {
+    "kayron": {
+      "command": "dotnet",
+      "args": [
+        "C:\\Meus Projetos\\KAYRON.MCP\\bin\\Debug\\net10.0\\KAYRON.MCP.dll"
+      ]
+    }
+  },
+  "excludeTools": []
+}

@@ -1,0 +1,18 @@
+{
+  "name": "kayron",
+  "owner": {
+    "name": "KAYRON"
+  },
+  "metadata": {
+    "description": "Agente de engenharia local KAYRON via MCP.",
+    "version": "1.0.0",
+    "pluginRoot": "."
+  },
+  "plugins": [
+    {
+      "name": "kayron",
+      "source": "local",
+      "description": "Conecta clientes de IA ao agente KAYRON local."
+    }
+  ]
+}

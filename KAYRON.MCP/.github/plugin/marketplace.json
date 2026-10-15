@@ -1,0 +1,12 @@
+{
+  "name": "kayron",
+  "description": "Agente de engenharia local KAYRON via MCP.",
+  "plugins": [
+    {
+      "name": "kayron",
+      "description": "Conecta o cliente ao agente KAYRON local.",
+      "version": "1.0.0",
+      "source": "./"
+    }
+  ]
+}

@@ -63,9 +63,14 @@ public sealed class ConvocadorMemoria
             ? new[] { exata }
             : _memoriaPostgres.Pesquisar(texto, 3)
                 .Where(EhConhecimentoUtilizavel)
+                .Where(memoria => _memoriaAprendida.Listar().Any(
+                    local => string.Equals(
+                        local.Chave,
+                        memoria.Chave,
+                        StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
-        if (memóriasRelevantes.Count == 0)
+        if (memóriasRelevantes.Length == 0)
         {
             memóriasRelevantes = _memoriaSemantica
                 .Pesquisar(texto, _memoriaAprendida.Listar(), 3)
