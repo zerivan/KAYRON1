@@ -87,7 +87,7 @@ public sealed class DeepSearch : IModeloInteligencia
         // Se a primeira rodada trouxer apenas comunidades ou agregadores,
         // tenta fontes institucionais antes de gerar a síntese.
         if (fontes.Count > 0 &&
-            !fontes.Any(f => PontuacaoAutoridadeFonte(f.Url) >= 3) &&
+            !fontes.Any(f => PontuacaoAutoridadeFonte(f.Url, termosConsulta) >= 3) &&
             termosConsulta.Length > 0)
         {
             foreach (var consultaInstitucional in new[]
@@ -99,7 +99,7 @@ public sealed class DeepSearch : IModeloInteligencia
             {
                 await Buscar(consultaInstitucional, fontes, cancellationToken);
                 await RemoverFontesIrrelevantesAsync(consulta, fontes, vetorConsulta, vetoresFontes, cancellationToken);
-                if (fontes.Any(f => PontuacaoAutoridadeFonte(f.Url) >= 3))
+                if (fontes.Any(f => PontuacaoAutoridadeFonte(f.Url, termosConsulta) >= 3))
                     break;
             }
 
@@ -109,7 +109,7 @@ public sealed class DeepSearch : IModeloInteligencia
         }
 
         if (fontes.Count > 0)
-            await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, vetoresFontes, cancellationToken);
+            await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, termosConsulta, vetoresFontes, cancellationToken);
         if (fontes.Count == 0 && termosConsulta.Length > 0)
         {
             await Buscar(string.Join(' ', termosConsulta) + " site:gov.br", fontes, cancellationToken);
@@ -307,7 +307,7 @@ public sealed class DeepSearch : IModeloInteligencia
                 pontos++;
         }
 
-        pontos += PontuacaoAutoridadeFonte(fonte.Url) * 2;
+        pontos += PontuacaoAutoridadeFonte(fonte.Url, termos) * 2;
 
         if (vetorConsulta is not null)
         {
@@ -355,6 +355,7 @@ public sealed class DeepSearch : IModeloInteligencia
     private async Task OrdenarFontesPorSemanticaAsync(
         List<ResultadoPesquisaWeb> fontes,
         float[] vetorConsulta,
+        IReadOnlyCollection<string> termosConsulta,
         Dictionary<string, float[]> vetoresFontes,
         CancellationToken cancellationToken)
     {
@@ -369,7 +370,7 @@ public sealed class DeepSearch : IModeloInteligencia
                     vetoresFontes[fonte.Url] = vetorFonte;
                 }
 
-                return (Fonte: fonte, Score: Cosine(vetorConsulta, vetorFonte) + PontuacaoAutoridadeFonte(fonte.Url) * 0.025d);
+                return (Fonte: fonte, Score: Cosine(vetorConsulta, vetorFonte) + PontuacaoAutoridadeFonte(fonte.Url, termosConsulta) * 0.025d);
             }
             catch
             {
@@ -518,7 +519,7 @@ public sealed class DeepSearch : IModeloInteligencia
 
     private static bool EhFonteConfiavel(string url) => PontuacaoAutoridadeFonte(url) >= 3;
 
-    private static int PontuacaoAutoridadeFonte(string url)
+    private static int PontuacaoAutoridadeFonte(string url, IReadOnlyCollection<string>? termosConsulta = null)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
@@ -535,7 +536,28 @@ public sealed class DeepSearch : IModeloInteligencia
         if (DominioCorresponde(host, PlataformasHospedagemConteudo))
             return -2;
 
+        if (DominioCorresponde(host, new[] { "microsoft.com" }))
+            return EhConsultaTecnica(termosConsulta) ? 4 : 0;
+
+        if (DominioCorresponde(host, new[] { "github.com" }))
+            return EhConsultaTecnica(termosConsulta) ? 3 : 0;
+
         return DominioCorresponde(host, DominiosFontesPrimarias) ? 4 : 0;
+    }
+
+    private static bool EhConsultaTecnica(IReadOnlyCollection<string>? termosConsulta)
+    {
+        if (termosConsulta is null || termosConsulta.Count == 0)
+            return false;
+
+        var termosTecnicos = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "microsoft", "dotnet", "net", "c#", "aspnet", "azure", "visualstudio",
+            "github", "git", "codigo", "software", "framework", "python", "javascript",
+            "typescript", "powershell", "windows", "linux", "sdk", "api", "nuget", "npm", "repositorio"
+        };
+
+        return termosConsulta.Any(termosTecnicos.Contains);
     }
 
     private static bool DominioCorresponde(string host, IEnumerable<string> dominios) =>
