@@ -1,0 +1,33 @@
+name: KAYRON Engine Build
+
+on:
+  pull_request:
+    paths:
+      - "KAYRON.Engine/**"
+      - "KAYRON.Core/**"
+      - ".github/workflows/engine-build.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "KAYRON.Engine/**"
+      - "KAYRON.Core/**"
+      - ".github/workflows/engine-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  engine-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore KAYRON.Engine
+        run: dotnet restore KAYRON.Engine/KAYRON.Engine.csproj
+      - name: Build KAYRON.Engine
+        run: dotnet build KAYRON.Engine/KAYRON.Engine.csproj --configuration Release --no-restore
