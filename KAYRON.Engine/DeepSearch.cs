@@ -548,7 +548,7 @@ public sealed class DeepSearch : IModeloInteligencia
         if (string.IsNullOrWhiteSpace(texto) || quantidadeFontes < 1)
             return false;
 
-        var citacoes = Regex.Matches(texto, @"\\[(\\d{1,2})\\]");
+        var citacoes = Regex.Matches(texto, @"\[(\d{1,2})\]");
         if (citacoes.Count == 0)
             return false;
 
