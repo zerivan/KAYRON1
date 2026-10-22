@@ -134,7 +134,7 @@ public sealed class DeepSearch : IModeloInteligencia
         contextoPesquisa.Adicionar("entrada_original", consulta);
         contextoPesquisa.Adicionar("intencao_detectada", "internet:pesquisar");
 
-        await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, vetoresFontes, cancellationToken);
+        await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, termosConsulta, vetoresFontes, cancellationToken);
         if (fontes.Count == 0)
             return new Resposta { Conteudo = string.Empty };
 
@@ -193,7 +193,7 @@ public sealed class DeepSearch : IModeloInteligencia
                 if (fontes.Count == 0)
                     continue;
 
-                await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, vetoresFontes, cancellationToken);
+                await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, termosConsulta, vetoresFontes, cancellationToken);
 
                 prompt = new StringBuilder();
                 prompt.AppendLine("MODO: ANÁLISE DE PESQUISA DO KAYRON.");
