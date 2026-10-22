@@ -374,7 +374,7 @@ public sealed class DeepSearch : IModeloInteligencia
             }
             catch
             {
-                return (Fonte: fonte, Score: PontuacaoAutoridadeFonte(fonte.Url) * 0.025d);
+                return (Fonte: fonte, Score: PontuacaoAutoridadeFonte(fonte.Url, termosConsulta) * 0.025d);
             }
         })))
             .OrderByDescending(x => x.Score)
