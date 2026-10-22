@@ -265,7 +265,7 @@ public sealed class DeepSearch : IModeloInteligencia
         var filtradas = avaliadas
             .Where(x => x.Pontos >= 2)
             .OrderByDescending(x => x.Pontos)
-            .ThenByDescending(x => EhFonteConfiavel(x.Fonte.Url))
+            .ThenByDescending(x => PontuacaoAutoridadeFonte(x.Fonte.Url, termos) >= 3)
             .Take(12)
             .Select(x => x.Fonte)
             .ToList();
@@ -378,7 +378,7 @@ public sealed class DeepSearch : IModeloInteligencia
             }
         })))
             .OrderByDescending(x => x.Score)
-            .ThenByDescending(x => EhFonteConfiavel(x.Fonte.Url))
+            .ThenByDescending(x => PontuacaoAutoridadeFonte(x.Fonte.Url, termosConsulta) >= 3)
             .Take(12)
             .Select(x => x.Fonte)
             .ToList();
@@ -513,7 +513,7 @@ public sealed class DeepSearch : IModeloInteligencia
             var titulo = termos.Count(termo => TextoContemTermo(fonte.Titulo, termo));
             var trecho = termos.Count(termo => TextoContemTermo(fonte.Trecho, termo));
             var url = termos.Count(termo => TextoContemTermo(fonte.Url, termo));
-            return (titulo >= 1 && trecho >= 1) || titulo >= 2 || (EhFonteConfiavel(fonte.Url) && (titulo >= 1 || trecho >= 2));
+            return (titulo >= 1 && trecho >= 1) || titulo >= 2 || (PontuacaoAutoridadeFonte(fonte.Url, termos) >= 3 && (titulo >= 1 || trecho >= 2));
         });
     }
 
@@ -533,8 +533,10 @@ public sealed class DeepSearch : IModeloInteligencia
         if (host == "wikipedia.org" || host.EndsWith(".wikipedia.org", StringComparison.OrdinalIgnoreCase))
             return -1;
 
+        // Plataformas de hospedagem (ex.: Issuu/Scribd) não são autoridades por si
+        // só, mas podem hospedar livros oficiais; não penalize o material pelo host.
         if (DominioCorresponde(host, PlataformasHospedagemConteudo))
-            return -2;
+            return 0;
 
         if (DominioCorresponde(host, new[] { "microsoft.com" }))
             return EhConsultaTecnica(termosConsulta) ? 4 : 0;
@@ -570,7 +572,13 @@ public sealed class DeepSearch : IModeloInteligencia
         if (string.IsNullOrWhiteSpace(texto) || quantidadeFontes < 1)
             return false;
 
-        var citacoes = Regex.Matches(texto, @"\[(\d{1,2})\]");
+        // Não aceite a numeração da lista final de fontes como se fosse uma
+        // citação no corpo da resposta.
+        var secaoFontes = Regex.Match(
+            texto,
+            @"(?im)^\s*(?:#{1,6}\s*)?(?:\*\*)?(?:fontes|sources|refer[eê]ncias)(?:\*\*)?\s*:?\s*$");
+        var corpoResposta = secaoFontes.Success ? texto[..secaoFontes.Index] : texto;
+        var citacoes = Regex.Matches(corpoResposta, @"\[(\d{1,2})\]");
         if (citacoes.Count == 0)
             return false;
 
