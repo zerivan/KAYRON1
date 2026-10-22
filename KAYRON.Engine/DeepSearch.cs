@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using KAYRON.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +13,27 @@ public sealed class DeepSearch : IModeloInteligencia
     private readonly ModeloInteligenciaGemini _modelo;
     private readonly ILogger<DeepSearch> _logger;
     private readonly IEmbeddingMemoria _embedding;
+
+    // Compare o host por limites de domínio, nunca por substring.
+    private static readonly string[] DominiosFontesPrimarias =
+    {
+        "gov.br", "gov", "edu.br", "edu", "ac.uk",
+        "usp.br", "unesp.br", "unicamp.br", "ufrj.br", "ufmg.br", "ufrgs.br",
+        "ufsc.br", "ufpr.br", "ufpe.br", "ufba.br", "ufrn.br", "ufc.br", "ufma.br",
+        "unb.br", "ufes.br", "fiocruz.br", "scielo.br", "bvsalud.org", "who.int",
+        "nasa.gov", "nih.gov", "noaa.gov", "nature.com", "science.org", "britannica.com"
+    };
+
+    private static readonly string[] DominiosConteudoUsuario =
+    {
+        "brainly.com", "quora.com", "reddit.com", "answers.yahoo.com",
+        "studocu.com", "coursehero.com", "docsity.com"
+    };
+
+    private static readonly string[] PlataformasHospedagemConteudo =
+    {
+        "issuu.com", "scribd.com", "medium.com", "wikipedia.org"
+    };
 
     public DeepSearch(
         HttpClient http,
@@ -61,6 +83,31 @@ public sealed class DeepSearch : IModeloInteligencia
         _logger.LogInformation("DEEPSEARCH: consulta={Consulta}; fontes_brutas={Quantidade}", consulta, fontes.Count);
         await RemoverFontesIrrelevantesAsync(consulta, fontes, vetorConsulta, vetoresFontes, cancellationToken);
         _logger.LogInformation("DEEPSEARCH: fontes_apos_filtro={Quantidade}", fontes.Count);
+
+        // Se a primeira rodada trouxer apenas comunidades ou agregadores,
+        // tenta fontes institucionais antes de gerar a síntese.
+        if (fontes.Count > 0 &&
+            !fontes.Any(f => PontuacaoAutoridadeFonte(f.Url) >= 3) &&
+            termosConsulta.Length > 0)
+        {
+            foreach (var consultaInstitucional in new[]
+                     {
+                         $"{consultaBusca} site:gov.br",
+                         $"{consultaBusca} site:edu.br",
+                         $"{consultaBusca} universidade fontes acadêmicas"
+                     })
+            {
+                await Buscar(consultaInstitucional, fontes, cancellationToken);
+                await RemoverFontesIrrelevantesAsync(consulta, fontes, vetorConsulta, vetoresFontes, cancellationToken);
+                if (fontes.Any(f => PontuacaoAutoridadeFonte(f.Url) >= 3))
+                    break;
+            }
+
+            _logger.LogInformation(
+                "DEEPSEARCH: fontes_institucionais={Quantidade}",
+                fontes.Count(f => PontuacaoAutoridadeFonte(f.Url) >= 3));
+        }
+
         if (fontes.Count > 0)
             await OrdenarFontesPorSemanticaAsync(fontes, vetorConsulta, vetoresFontes, cancellationToken);
         if (fontes.Count == 0 && termosConsulta.Length > 0)
@@ -102,7 +149,11 @@ public sealed class DeepSearch : IModeloInteligencia
         prompt.AppendLine("Não responda sobre assuntos que não estejam sustentados pelas fontes recuperadas.");
         prompt.AppendLine("Se as fontes não sustentarem uma resposta factual suficiente, informe exatamente isso.");
         prompt.AppendLine("Produza somente a síntese factual necessária para o KAYRON; não converse diretamente com o usuário.");
-        prompt.AppendLine("Inclua uma seção Fontes com título e URL.");
+        prompt.AppendLine("Associe cada afirmação factual à referência correspondente usando [n] no corpo da resposta.");
+        prompt.AppendLine("Use os números exatamente como aparecem no bloco FONTES (1..N).");
+        prompt.AppendLine("Só cite uma fonte quando o TRECHO fornecido apoiar a afirmação; título ou domínio confiável, isoladamente, não comprovam o conteúdo.");
+        prompt.AppendLine("Se os trechos não sustentarem uma afirmação, declare a lacuna em vez de completar com conhecimento prévio.");
+        prompt.AppendLine("Inclua uma seção Fontes com título e URL, usando a mesma numeração das citações.");
         prompt.AppendLine();
         prompt.AppendLine("PERGUNTA:");
         prompt.AppendLine(consulta);
@@ -115,13 +166,16 @@ public sealed class DeepSearch : IModeloInteligencia
         contextoAnalise.Adicionar("intencao_detectada", "internet:pesquisar");
 
         Resposta? respostaInicial = null;
+        var quantidadeFontesRespostaInicial = 0;
 
         try
         {
             var resposta = await ModeloAuxiliar(prompt.ToString(), contextoAnalise, cancellationToken);
             respostaInicial = resposta;
+            quantidadeFontesRespostaInicial = fontes.Count;
             if (EhRespostaPesquisaValida(resposta.Conteudo) &&
-                !EhEvidenciaInsuficiente(resposta.Conteudo))
+                !EhEvidenciaInsuficiente(resposta.Conteudo) &&
+                TemCitacoesFontesValidas(resposta.Conteudo, fontes.Count))
                 return resposta;
 
             // Se a primeira pesquisa não sustentar a resposta, não encerre o turno.
@@ -148,7 +202,11 @@ public sealed class DeepSearch : IModeloInteligencia
                 prompt.AppendLine("Não use memória, conhecimento prévio ou suposições.");
                 prompt.AppendLine("Responda diretamente à pergunta e inclua os fatos históricos necessários.");
                 prompt.AppendLine("Se ainda houver lacunas, faça a melhor síntese possível apenas com o que estiver sustentado pelas fontes.");
-                prompt.AppendLine("Inclua uma seção Fontes com título e URL.");
+                prompt.AppendLine("Associe cada afirmação factual à referência correspondente usando [n] no corpo da resposta.");
+                prompt.AppendLine("Use os números exatamente como aparecem no bloco FONTES (1..N).");
+                prompt.AppendLine("Só cite uma fonte quando o TRECHO fornecido apoiar a afirmação; título ou domínio confiável, isoladamente, não comprovam o conteúdo.");
+                prompt.AppendLine("Se os trechos não sustentarem uma afirmação, declare a lacuna em vez de completar com conhecimento prévio.");
+                prompt.AppendLine("Inclua uma seção Fontes com título e URL, usando a mesma numeração das citações.");
                 prompt.AppendLine();
                 prompt.AppendLine("PERGUNTA:");
                 prompt.AppendLine(consulta);
@@ -158,7 +216,8 @@ public sealed class DeepSearch : IModeloInteligencia
 
                 var novaResposta = await ModeloAuxiliar(prompt.ToString(), contextoAnalise, cancellationToken);
                 if (EhRespostaPesquisaValida(novaResposta.Conteudo) &&
-                    !EhEvidenciaInsuficiente(novaResposta.Conteudo))
+                    !EhEvidenciaInsuficiente(novaResposta.Conteudo) &&
+                    TemCitacoesFontesValidas(novaResposta.Conteudo, fontes.Count))
                     return novaResposta;
             }
         }
@@ -167,7 +226,10 @@ public sealed class DeepSearch : IModeloInteligencia
             _logger.LogWarning(ex, "Síntese Gemini indisponível; usando somente conteúdo recuperado.");
         }
 
-        if (respostaInicial is not null && !string.IsNullOrWhiteSpace(respostaInicial.Conteudo))
+        if (respostaInicial is not null &&
+            EhRespostaPesquisaValida(respostaInicial.Conteudo) &&
+            !EhEvidenciaInsuficiente(respostaInicial.Conteudo) &&
+            TemCitacoesFontesValidas(respostaInicial.Conteudo, quantidadeFontesRespostaInicial))
             return respostaInicial;
 
         var fallback = Fallback(consulta, fontes);
@@ -245,8 +307,7 @@ public sealed class DeepSearch : IModeloInteligencia
                 pontos++;
         }
 
-        if (EhFonteConfiavel(fonte.Url))
-            pontos += 2;
+        pontos += PontuacaoAutoridadeFonte(fonte.Url) * 2;
 
         if (vetorConsulta is not null)
         {
@@ -308,11 +369,11 @@ public sealed class DeepSearch : IModeloInteligencia
                     vetoresFontes[fonte.Url] = vetorFonte;
                 }
 
-                return (Fonte: fonte, Score: Cosine(vetorConsulta, vetorFonte));
+                return (Fonte: fonte, Score: Cosine(vetorConsulta, vetorFonte) + PontuacaoAutoridadeFonte(fonte.Url) * 0.025d);
             }
             catch
             {
-                return (Fonte: fonte, Score: 0d);
+                return (Fonte: fonte, Score: PontuacaoAutoridadeFonte(fonte.Url) * 0.025d);
             }
         })))
             .OrderByDescending(x => x.Score)
@@ -455,16 +516,50 @@ public sealed class DeepSearch : IModeloInteligencia
         });
     }
 
-    private static bool EhFonteConfiavel(string url)
+    private static bool EhFonteConfiavel(string url) => PontuacaoAutoridadeFonte(url) >= 3;
+
+    private static int PontuacaoAutoridadeFonte(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return -4;
+
+        var host = uri.Host.TrimEnd('.').ToLowerInvariant();
+
+        if (DominioCorresponde(host, DominiosConteudoUsuario))
+            return -4;
+
+        if (host == "wikipedia.org" || host.EndsWith(".wikipedia.org", StringComparison.OrdinalIgnoreCase))
+            return -1;
+
+        if (DominioCorresponde(host, PlataformasHospedagemConteudo))
+            return -2;
+
+        return DominioCorresponde(host, DominiosFontesPrimarias) ? 4 : 0;
+    }
+
+    private static bool DominioCorresponde(string host, IEnumerable<string> dominios) =>
+        dominios.Any(dominio =>
+            host.Equals(dominio, StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith("." + dominio, StringComparison.OrdinalIgnoreCase));
+
+    private static bool TemCitacoesFontesValidas(string? texto, int quantidadeFontes)
+    {
+        if (string.IsNullOrWhiteSpace(texto) || quantidadeFontes < 1)
             return false;
 
-        var host = uri.Host.ToLowerInvariant();
-        return host.EndsWith(".gov.br", StringComparison.Ordinal) ||
-               host.EndsWith(".edu.br", StringComparison.Ordinal) ||
-               host.Contains("microsoft.com", StringComparison.Ordinal) ||
-               host.Contains("github.com", StringComparison.Ordinal);
+        var citacoes = Regex.Matches(texto, @"\\[(\\d{1,2})\\]");
+        if (citacoes.Count == 0)
+            return false;
+
+        foreach (Match citacao in citacoes)
+        {
+            if (!int.TryParse(citacao.Groups[1].Value, out var indice) ||
+                indice < 1 || indice > Math.Min(quantidadeFontes, 12))
+                return false;
+        }
+
+        return true;
     }
 
     private async Task Buscar(
