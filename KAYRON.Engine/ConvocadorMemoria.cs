@@ -61,11 +61,21 @@ public sealed class ConvocadorMemoria
         var exata = _memoriaAprendida.Recuperar(texto);
         var memóriasRelevantes = exata is not null
             ? new[] { exata }
-            : _memoriaPostgres.Pesquisar(texto, 3);
+            : _memoriaPostgres.Pesquisar(texto, 3)
+                .Where(EhConhecimentoUtilizavel)
+                .Where(memoria => _memoriaAprendida.Listar().Any(
+                    local => string.Equals(
+                        local.Chave,
+                        memoria.Chave,
+                        StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
 
-        if (memóriasRelevantes.Count == 0)
+        if (memóriasRelevantes.Length == 0)
         {
-            memóriasRelevantes = _memoriaSemantica.Pesquisar(texto, _memoriaAprendida.Listar(), 3);
+            memóriasRelevantes = _memoriaSemantica
+                .Pesquisar(texto, _memoriaAprendida.Listar(), 3)
+                .Where(EhConhecimentoUtilizavel)
+                .ToArray();
         }
 
         foreach (var memoriaRelevante in memóriasRelevantes)
@@ -124,7 +134,7 @@ public sealed class ConvocadorMemoria
         KAYRON.Core.MemoriaAprendida? melhor = null;
         var melhorPontuacao = 0;
 
-        foreach (var memoria in _memoriaAprendida.Listar())
+        foreach (var memoria in _memoriaAprendida.Listar().Where(EhConhecimentoUtilizavel))
         {
             if (string.IsNullOrWhiteSpace(memoria.Chave) ||
                 string.IsNullOrWhiteSpace(memoria.Valor))
@@ -168,6 +178,22 @@ public sealed class ConvocadorMemoria
         }
 
         return melhor;
+    }
+
+    private static bool EhConhecimentoUtilizavel(KAYRON.Core.MemoriaAprendida memoria)
+    {
+        if (!string.Equals(memoria.Tipo, "conhecimento", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.Equals(memoria.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) ||
+            !memoria.Tags.Any(tag => string.Equals(tag, "verificado", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var referencia = memoria.AtualizadoEm > memoria.AprendidoEm
+            ? memoria.AtualizadoEm
+            : memoria.AprendidoEm;
+
+        return DateTime.UtcNow - referencia <= TimeSpan.FromDays(7);
     }
 
     private static string Normalizar(string valor)

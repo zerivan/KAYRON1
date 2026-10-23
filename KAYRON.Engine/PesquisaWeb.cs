@@ -39,7 +39,7 @@ public sealed class PesquisaWeb
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            using var response = await SendWithTimeoutAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
                 continue;
 
@@ -86,45 +86,197 @@ public sealed class PesquisaWeb
         consultaLimpa = NormalizarConsulta(consultaLimpa);
         var limiteReal = Math.Clamp(limite, 1, 10);
 
+        var resultadosDiversificados = new List<ResultadoPesquisaWeb>();
+
         var braveKey = Environment.GetEnvironmentVariable("BRAVE_SEARCH_API_KEY");
         if (!string.IsNullOrWhiteSpace(braveKey))
         {
             var resultados = await PesquisarBraveAsync(consultaLimpa, limiteReal, braveKey, cancellationToken);
+            _logger.LogInformation("PESQUISAWEB PROVEDOR=Brave; consulta={Consulta}; resultados_brutos={Quantidade}", consultaLimpa, resultados.Count);
             resultados = await EnriquecerResultadosAsync(resultados, consultaLimpa, cancellationToken);
-            if (resultados.Count > 0)
-                return resultados;
+            _logger.LogInformation("PESQUISAWEB PROVEDOR=Brave; resultados_enriquecidos={Quantidade}", resultados.Count);
+            AdicionarResultadosDiversificados(resultadosDiversificados, resultados, limiteReal);
+            if (TemDiversidadeSuficiente(resultadosDiversificados, limiteReal))
+                return AplicarRestricaoDominioSolicitado(consultaLimpa, resultadosDiversificados);
         }
 
         var tavilyKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");
         if (!string.IsNullOrWhiteSpace(tavilyKey))
         {
             var resultados = await PesquisarTavilyAsync(consultaLimpa, limiteReal, tavilyKey, cancellationToken);
+            _logger.LogInformation("PESQUISAWEB PROVEDOR=Tavily; consulta={Consulta}; resultados_brutos={Quantidade}", consultaLimpa, resultados.Count);
             resultados = await EnriquecerResultadosAsync(resultados, consultaLimpa, cancellationToken);
-            if (resultados.Count > 0)
-                return resultados;
+            _logger.LogInformation("PESQUISAWEB PROVEDOR=Tavily; resultados_enriquecidos={Quantidade}", resultados.Count);
+            AdicionarResultadosDiversificados(resultadosDiversificados, resultados, limiteReal);
+            if (TemDiversidadeSuficiente(resultadosDiversificados, limiteReal))
+                return AplicarRestricaoDominioSolicitado(consultaLimpa, resultadosDiversificados);
         }
 
-        // Bing ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© usado antes do parser HTML do Google porque sua estrutura
-        // atual estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ retornando resultados de blocos de conteÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºdo nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o relacionados
-        // em algumas consultas em portuguÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âªs. A relevÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ncia ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© validada antes do enriquecimento.
-        var bing = await PesquisarBingAsync(consultaLimpa, limiteReal, cancellationToken);
-        if (bing.Count > 0)
-            return await EnriquecerResultadosAsync(bing, consultaLimpa, cancellationToken);
         var google = await PesquisarGoogleAsync(consultaLimpa, limiteReal, cancellationToken);
-        if (TemRelevanciaBasica(google, consultaLimpa))
-            return await EnriquecerResultadosAsync(google, consultaLimpa, cancellationToken);
+        var googleRelevante = TemRelevanciaBasica(google, consultaLimpa);
+        _logger.LogInformation("PESQUISAWEB PROVEDOR=Google; consulta={Consulta}; resultados_brutos={Quantidade}; relevancia_basica={Relevante}", consultaLimpa, google.Count, googleRelevante);
+        if (googleRelevante)
+        {
+            var resultados = await EnriquecerResultadosAsync(google, consultaLimpa, cancellationToken);
+            AdicionarResultadosDiversificados(resultadosDiversificados, resultados, limiteReal);
+            if (TemDiversidadeSuficiente(resultadosDiversificados, limiteReal))
+                return AplicarRestricaoDominioSolicitado(consultaLimpa, resultadosDiversificados);
+        }
 
-        var bingJina = await PesquisarBingViaJinaAsync(consultaLimpa, limiteReal, cancellationToken);
-        return await EnriquecerResultadosAsync(bingJina, consultaLimpa, cancellationToken);
+
+        if (resultadosDiversificados.Count > 0)
+            return AplicarRestricaoDominioSolicitado(consultaLimpa, resultadosDiversificados);
+
+        // Uma consulta com site: exige respeitar o domínio solicitado.
+        // Não usar a Wikipédia como fallback para esse tipo de consulta.
+        if (Regex.IsMatch(consultaLimpa, @"(?:^|\s)site:[^\s]+", RegexOptions.IgnoreCase))
+            return Array.Empty<ResultadoPesquisaWeb>();
+
+        return await PesquisarWikipediaAsync(consultaLimpa, limiteReal, cancellationToken);
+    }
+
+    private static IReadOnlyList<ResultadoPesquisaWeb> AplicarRestricaoDominioSolicitado(
+        string consulta,
+        IEnumerable<ResultadoPesquisaWeb> resultados)
+    {
+        var correspondencia = Regex.Match(
+            consulta,
+            @"(?:^|\s)site:(?<dominio>[^\s]+)",
+            RegexOptions.IgnoreCase);
+
+        if (!correspondencia.Success)
+            return resultados.ToList();
+
+        var dominioSolicitado = correspondencia.Groups["dominio"].Value
+            .Trim()
+            .TrimEnd('/')
+            .ToLowerInvariant();
+
+        return resultados
+            .Where(resultado =>
+            {
+                if (!Uri.TryCreate(resultado.Url, UriKind.Absolute, out var uri))
+                    return false;
+
+                var host = uri.Host.ToLowerInvariant();
+                return host.Equals(dominioSolicitado, StringComparison.OrdinalIgnoreCase) ||
+                       host.EndsWith("." + dominioSolicitado, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+    }
+
+    private static void AdicionarResultadosDiversificados(
+        List<ResultadoPesquisaWeb> destino,
+        IEnumerable<ResultadoPesquisaWeb> novos,
+        int limite)
+    {
+        foreach (var resultado in novos)
+        {
+            if (destino.Count >= limite ||
+                string.IsNullOrWhiteSpace(resultado.Url) ||
+                destino.Any(x => x.Url.Equals(resultado.Url, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var dominio = ObterDominioFonte(resultado.Url);
+            if (string.IsNullOrWhiteSpace(dominio))
+                continue;
+
+            var quantidadeDominio = destino.Count(x =>
+                ObterDominioFonte(x.Url).Equals(dominio, StringComparison.OrdinalIgnoreCase));
+
+            var ehWikipedia = dominio.Equals("wikipedia.org", StringComparison.OrdinalIgnoreCase);
+            if ((ehWikipedia && quantidadeDominio >= 1) || (!ehWikipedia && quantidadeDominio >= 2))
+                continue;
+
+            destino.Add(resultado);
+        }
+    }
+
+    private static bool TemDiversidadeSuficiente(
+        IReadOnlyCollection<ResultadoPesquisaWeb> resultados,
+        int limite)
+    {
+        var dominios = resultados
+            .Select(x => ObterDominioFonte(x.Url))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        return resultados.Count >= Math.Min(limite, 7) &&
+               dominios >= Math.Min(limite, 4);
+    }
+
+    private static string ObterDominioFonte(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return string.Empty;
+
+        var host = uri.Host.Trim().ToLowerInvariant();
+        if (host.StartsWith("www.", StringComparison.Ordinal))
+            host = host[4..];
+
+        if (host.EndsWith(".wikipedia.org", StringComparison.Ordinal) ||
+            host.Equals("wikipedia.org", StringComparison.Ordinal))
+            return "wikipedia.org";
+
+        return host;
+    }
+
+    private async Task<HttpResponseMessage> SendWithTimeoutAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(FetchTimeout);
+        return await _httpClient.SendAsync(request, cts.Token).ConfigureAwait(false);
+    }
+
+    private async Task<HttpResponseMessage> SendWithTimeoutAsync(
+        HttpRequestMessage request,
+        HttpCompletionOption completionOption,
+        CancellationToken cancellationToken)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(FetchTimeout);
+        return await _httpClient.SendAsync(request, completionOption, cts.Token).ConfigureAwait(false);
+    }
+
+    private static bool IsDotNetQuery(string consulta)
+    {
+        if (string.IsNullOrWhiteSpace(consulta))
+            return false;
+
+        return Regex.IsMatch(
+            consulta,
+            @"(?i)(?<![\p{L}\p{N}])(?:\.net|dotnet|c#|f#|vb\.net|linq|entity\s+framework|ef\s+core|asp\.net|blazor|maui|wpf|avalonia)(?![\p{L}\p{N}])");
     }
     private static string NormalizarConsulta(string consulta)
     {
         var resultado = consulta.Trim();
+        resultado = Regex.Replace(
+            resultado,
+            @"^(?:(?:ol[áa])\s*[,!:;-]?\s+)?kayron\b[\s,.:;!?—-]*",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        resultado = Regex.Replace(resultado, @"\bvenesuela\b", "Venezuela", RegexOptions.IgnoreCase);
         var prefixos = new[]
         {
+            "informações atuais sobre ",
+            "informacoes atuais sobre ",
+            "informação atual sobre ",
+            "informacao atual sobre ",
+            "informações sobre ",
+            "informacoes sobre ",
+            "notícias sobre ",
+            "noticias sobre ",
+            "dados sobre ",
+            "pesquise na internet: ",
             "pesquise na internet ",
+            "pesquise na web: ",
             "pesquise na web ",
+            "pesquisar na internet: ",
             "pesquisar na internet ",
+            "pesquisar na web: ",
             "pesquisar na web ",
             "pesquisa na internet ",
             "pesquisa na web ",
@@ -139,84 +291,49 @@ public sealed class PesquisaWeb
             "busque "
         };
 
-        foreach (var prefixo in prefixos)
+        bool prefixoRemovido;
+        do
         {
-            if (resultado.StartsWith(prefixo, StringComparison.OrdinalIgnoreCase))
-                return resultado[prefixo.Length..].Trim();
+            prefixoRemovido = false;
+            foreach (var prefixo in prefixos)
+            {
+                if (resultado.StartsWith(prefixo, StringComparison.OrdinalIgnoreCase))
+                {
+                    resultado = resultado[prefixo.Length..].Trim();
+                    prefixoRemovido = true;
+                    break;
+                }
+            }
+        } while (prefixoRemovido);
+
+        resultado = resultado.Trim().TrimEnd('.', '?', '!', ' ');
+        var sufixos = new[]
+        {
+            " e apresente as fontes consultadas",
+            " e apresente as fontes",
+            " e inclua as fontes consultadas",
+            " e mostre as fontes consultadas",
+            " e informe as fontes consultadas",
+            " e cite as fontes consultadas",
+            " e cite fontes consultadas",
+            " e cite fontes",
+            " cite as fontes consultadas",
+            " cite fontes consultadas",
+            " cite fontes"
+        };
+
+        foreach (var sufixo in sufixos)
+        {
+            if (resultado.EndsWith(sufixo, StringComparison.OrdinalIgnoreCase))
+            {
+                resultado = resultado[..^sufixo.Length].Trim();
+                break;
+            }
         }
 
         return resultado;
     }
 
-
-    private async Task<IReadOnlyList<ResultadoPesquisaWeb>> PesquisarBingAsync(
-        string consulta,
-        int limite,
-        CancellationToken cancellationToken)
-    {
-        var url = "https://www.bing.com/search?q=" + Uri.EscapeDataString(consulta) +
-                  "&count=" + limite + "&setlang=pt-BR";
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.TryAddWithoutValidation("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142 Safari/537.36");
-        request.Headers.TryAddWithoutValidation("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8");
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            return Array.Empty<ResultadoPesquisaWeb>();
-
-        var html = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ExtrairResultadosBing(html, limite);
-    }
-
-    private async Task<IReadOnlyList<ResultadoPesquisaWeb>> PesquisarBingViaJinaAsync(
-        string consulta,
-        int limite,
-        CancellationToken cancellationToken)
-    {
-        var alvo = "https://www.bing.com/search?q=" + Uri.EscapeDataString(consulta);
-        var url = "https://r.jina.ai/" + alvo;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
-                return Array.Empty<ResultadoPesquisaWeb>();
-
-            var markdown = await response.Content.ReadAsStringAsync(cancellationToken);
-            return ExtrairResultadosBingMarkdown(markdown, limite);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            _logger.LogDebug(ex, "Fallback Jina/Bing indisponÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vel.");
-            return Array.Empty<ResultadoPesquisaWeb>();
-        }
-    }
-
-    private static IReadOnlyList<ResultadoPesquisaWeb> ExtrairResultadosBingMarkdown(string markdown, int limite)
-    {
-        var resultados = new List<ResultadoPesquisaWeb>();
-        var padrao = @"##\s*\[\*\*(?<titulo>.*?)\*\*\]\((?<url>https?://[^)]+)\)\s*(?<trecho>.*?)(?=\n\s*\d+\.\s+|\z)";
-        foreach (Match match in Regex.Matches(markdown, padrao, RegexOptions.IgnoreCase | RegexOptions.Singleline))
-        {
-            var titulo = LimparHtml(match.Groups["titulo"].Value);
-            var url = NormalizarUrl(match.Groups["url"].Value);
-            var trecho = LimparHtml(match.Groups["trecho"].Value);
-            if (string.IsNullOrWhiteSpace(titulo) || string.IsNullOrWhiteSpace(url))
-                continue;
-            if (resultados.Any(x => x.Url.Equals(url, StringComparison.OrdinalIgnoreCase)))
-                continue;
-
-            resultados.Add(new ResultadoPesquisaWeb(titulo, url, LimitarConteudo(trecho)));
-            if (resultados.Count >= limite)
-                break;
-        }
-
-        return resultados.ToArray();
-    }
 
     private static bool TemRelevanciaBasica(
         IReadOnlyList<ResultadoPesquisaWeb> resultados,
@@ -234,35 +351,41 @@ public sealed class PesquisaWeb
         if (termos.Length == 0)
             return resultados.Count > 0;
 
+        var termosGenericos = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "principais", "principal", "atual", "atuais", "atualmente", "hoje", "sobre",
+            "quem", "qual", "quais", "como", "quando", "onde", "porque", "porquê",
+            "informacao", "informacoes", "encontrada", "encontradas",
+            "fontes", "fonte", "pesquisa", "pesquisar", "pesquise",
+            "apresente", "apresentar", "consultada", "consultadas", "consultado", "consultados",
+            "internet", "web", "dados", "recentes"
+        };
+
+        var termosEspecificos = termos
+            .Where(termo => !termosGenericos.Contains(termo))
+            .ToArray();
+
         return resultados.Any(r =>
         {
-            var texto = $"{r.Titulo} {r.Trecho} {r.Url}".ToLowerInvariant();
-            return termos.Any(texto.Contains);
+            var texto = new string(
+                $"{r.Titulo} {r.Trecho} {r.Url}"
+                    .ToLowerInvariant()
+                    .Normalize(System.Text.NormalizationForm.FormD)
+                    .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                    .ToArray());
+
+            var palavrasTexto = Regex.Split(texto, @"[^\p{L}\p{Nd}]+");
+            var acertosEspecificos = termosEspecificos.Count(termo =>
+                texto.Contains(termo, StringComparison.OrdinalIgnoreCase) ||
+                (termo.Length >= 6 && palavrasTexto.Any(palavra =>
+                    palavra.Length >= 6 && DistanciaEdicaoMaximaUm(termo, palavra))));
+
+            // Exija pelo menos dois termos específicos, sem exigir que o título
+            // ou o trecho repita quase toda a consulta. Isso evita descartar fontes
+            // relevantes que usam sinônimos ou cobrem apenas parte da pergunta.
+            var minimoAcertos = Math.Min(2, termosEspecificos.Length);
+            return acertosEspecificos >= minimoAcertos;
         });
-    }
-
-    private static IReadOnlyList<ResultadoPesquisaWeb> ExtrairResultadosBing(string html, int limite)
-    {
-        var resultados = new List<ResultadoPesquisaWeb>();
-        var padrao = @"<li[^>]+class=""[^""]*b_algo[^""]*""[^>]*>.*?<h2[^>]*>\s*<a[^>]+href=""(?<url>[^""]+)""[^>]*>(?<titulo>.*?)</a>.*?</h2>(?<resto>.*?)</li>";
-
-        foreach (Match match in Regex.Matches(html, padrao, RegexOptions.IgnoreCase | RegexOptions.Singleline))
-        {
-            var url = NormalizarUrl(match.Groups["url"].Value);
-            var titulo = LimparHtml(match.Groups["titulo"].Value);
-            var trecho = LimparHtml(match.Groups["resto"].Value);
-
-            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(titulo) ||
-                url.Contains("bing.com", StringComparison.OrdinalIgnoreCase) ||
-                resultados.Any(x => x.Url.Equals(url, StringComparison.OrdinalIgnoreCase)))
-                continue;
-
-            resultados.Add(new ResultadoPesquisaWeb(titulo, url, trecho));
-            if (resultados.Count >= limite)
-                break;
-        }
-
-        return resultados.ToArray();
     }
 
     private async Task<IReadOnlyList<ResultadoPesquisaWeb>> PesquisarGoogleAsync(
@@ -278,7 +401,7 @@ public sealed class PesquisaWeb
         request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/142 Safari/537.36");
         request.Headers.TryAddWithoutValidation("Accept-Language", "pt-BR,pt;q=0.9,en;q=0.8");
 
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        using var response = await SendWithTimeoutAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Google retornou HTTP {Status}.", (int)response.StatusCode);
@@ -427,7 +550,7 @@ public sealed class PesquisaWeb
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.tavily.com/search");
         request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        using var response = await SendWithTimeoutAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning("Tavily retornou HTTP {Status}; usando prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ximo provedor.", (int)response.StatusCode);
@@ -582,6 +705,114 @@ public sealed class PesquisaWeb
         return WebUtility.UrlDecode(url).Trim();
     }
 
+    private static string ConstruirConsultaWikipedia(string consulta)
+    {
+        var ignorar = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "o", "as", "os", "e", "de", "do", "da", "dos", "das",
+            "em", "no", "na", "nos", "nas", "por", "para", "com",
+            "qual", "quais", "que", "como", "quando", "onde", "quem",
+            "é", "e", "um", "uma", "uns", "umas", "sobre", "me", "se"
+        };
+
+        var termos = consulta
+            .Normalize(System.Text.NormalizationForm.FormD)
+            .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .ToArray();
+
+        var texto = new string(termos).ToLowerInvariant();
+
+        var palavras = texto
+            .Split(
+                new[] { ' ', '\t', '\r', '\n', ',', '.', ':', ';', '?', '!', '-', '_', '/', '\\' },
+                StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => p.Length >= 3 && !ignorar.Contains(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToArray();
+
+        return palavras.Length > 0
+            ? string.Join(' ', palavras)
+            : consulta.Trim();
+    }
+
+    private async Task<IReadOnlyList<ResultadoPesquisaWeb>> PesquisarWikipediaAsync(
+        string consulta,
+        int limite,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var consultaWikipedia = ConstruirConsultaWikipedia(consulta);
+
+            var url =
+                "https://pt.wikipedia.org/w/api.php?action=query&list=search" +
+                "&format=json&utf8=1&srlimit=" +
+                limite +
+                "&srsearch=" +
+                Uri.EscapeDataString(consultaWikipedia);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation("User-Agent", "KAYRON/1.0");
+            using var response = await SendWithTimeoutAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+                return Array.Empty<ResultadoPesquisaWeb>();
+
+            using var documento =
+                JsonDocument.Parse(
+                    await response.Content.ReadAsStringAsync(cancellationToken));
+
+            if (!documento.RootElement.TryGetProperty("query", out var consultaElemento) ||
+                !consultaElemento.TryGetProperty("search", out var resultadosElemento) ||
+                resultadosElemento.ValueKind != JsonValueKind.Array)
+                return Array.Empty<ResultadoPesquisaWeb>();
+
+            var resultados = new List<ResultadoPesquisaWeb>();
+
+            foreach (var item in resultadosElemento.EnumerateArray())
+            {
+                var titulo =
+                    item.TryGetProperty("title", out var tituloElemento)
+                        ? tituloElemento.GetString() ?? string.Empty
+                        : string.Empty;
+
+                var trecho =
+                    item.TryGetProperty("snippet", out var trechoElemento)
+                        ? LimparHtml(trechoElemento.GetString() ?? string.Empty)
+                        : string.Empty;
+
+                if (string.IsNullOrWhiteSpace(titulo))
+                    continue;
+
+                var urlPagina =
+                    "https://pt.wikipedia.org/wiki/" +
+                    Uri.EscapeDataString(titulo.Replace(' ', '_'));
+
+                resultados.Add(
+                    new ResultadoPesquisaWeb(
+                        titulo,
+                        urlPagina,
+                        trecho));
+
+                if (resultados.Count >= limite)
+                    break;
+            }
+
+            return TemRelevanciaBasica(resultados, consulta)
+                ? resultados
+                : Array.Empty<ResultadoPesquisaWeb>();
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException or
+            JsonException or
+            TaskCanceledException)
+        {
+            _logger.LogDebug(ex, "Fallback da Wikipedia indisponível.");
+            return Array.Empty<ResultadoPesquisaWeb>();
+        }
+    }
+
     private static string LimparHtml(string valor)
     {
         var texto = Regex.Replace(valor, "<[^>]+>", " ");
@@ -590,8 +821,49 @@ public sealed class PesquisaWeb
         return Regex.Replace(texto, @"\s+", " ").Trim();
     }
 
+    private static bool DistanciaEdicaoMaximaUm(string a, string b)
+    {
+        if (Math.Abs(a.Length - b.Length) > 1)
+            return false;
+
+        var i = 0;
+        var j = 0;
+        var diferencas = 0;
+        while (i < a.Length && j < b.Length)
+        {
+            if (char.ToLowerInvariant(a[i]) == char.ToLowerInvariant(b[j]))
+            {
+                i++;
+                j++;
+                continue;
+            }
+
+            if (++diferencas > 1)
+                return false;
+
+            if (a.Length > b.Length)
+                i++;
+            else if (b.Length > a.Length)
+                j++;
+            else
+            {
+                i++;
+                j++;
+            }
+        }
+
+        if (i < a.Length || j < b.Length)
+            diferencas++;
+
+        return diferencas <= 1;
+    }
+
     private static string NormalizarTermo(string termo)
     {
-        return Regex.Replace(termo.ToLowerInvariant(), @"[^\p{L}\p{Nd}]", "");
+        var normalizado = termo.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        normalizado = new string(normalizado
+            .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .ToArray());
+        return Regex.Replace(normalizado, @"[^\p{L}\p{Nd}]", "");
     }
 }

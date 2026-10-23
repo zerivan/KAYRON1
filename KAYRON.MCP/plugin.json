@@ -1,0 +1,19 @@
+{
+  "name": "kayron",
+  "description": "Agente de engenharia local KAYRON exposto por Model Context Protocol.",
+  "version": "1.0.0",
+  "author": {
+    "name": "KAYRON"
+  },
+  "homepage": "https://github.com/zerivan/KAYRON1",
+  "repository": "https://github.com/zerivan/KAYRON1",
+  "license": "Proprietary",
+  "keywords": [
+    "ai-agent",
+    "mcp",
+    "coding-agent",
+    "automation",
+    "kayron"
+  ],
+  "mcpServers": ".mcp.json"
+}

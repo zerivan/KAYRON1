@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using KAYRON.Core;
 
 namespace KAYRON.Engine;
@@ -95,6 +95,14 @@ public sealed class ResolvedorContexto
                     "sim");
             }
 
+            var assunto = ExtrairAssuntoDaResposta(ultimaResposta);
+
+            if (!string.IsNullOrWhiteSpace(assunto) &&
+                ContemReferenciaPessoa(resultado))
+            {
+                resultado = SubstituirReferenciaPessoa(resultado, assunto);
+            }
+
             resultado =
                 $"{resultado}{Environment.NewLine}" +
                 $"Contexto da referência:{Environment.NewLine}" +
@@ -102,6 +110,45 @@ public sealed class ResolvedorContexto
         }
 
         return resultado;
+    }
+
+    private static bool ContemReferenciaPessoa(string texto)
+    {
+        return texto.Contains("ele", StringComparison.OrdinalIgnoreCase) ||
+               texto.Contains("ela", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SubstituirReferenciaPessoa(string texto, string assunto)
+    {
+        return Regex.Replace(
+            texto,
+            @"(ele|ela)",
+            assunto,
+            RegexOptions.IgnoreCase);
+    }
+
+    private static string? ExtrairAssuntoDaResposta(string resposta)
+    {
+        var primeiraFrase = resposta
+            .Split(new[] { "\\n\\n", "\\n", ".", "!", "?" }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim();
+
+        if (string.IsNullOrWhiteSpace(primeiraFrase))
+            return null;
+
+        var correspondencia = Regex.Match(
+            primeiraFrase,
+            @"(?:Ã©|e|foi|chama-se|se chama)\s+(.+)$",
+            RegexOptions.IgnoreCase);
+
+        if (!correspondencia.Success)
+            return null;
+
+        var assunto = correspondencia.Groups[1].Value
+            .Trim()
+            .Trim('"', '\'', '(', ')', '[', ']', ':', ';', ',');
+
+        return assunto.Length is >= 2 and <= 300 ? assunto : null;
     }
 
     private static bool EhContinuacaoConversacional(string texto)

@@ -1,0 +1,9 @@
+{
+  "name": "kayron",
+  "version": "1.0.0",
+  "description": "Agente de engenharia local KAYRON via MCP.",
+  "homepage": "https://github.com/zerivan/KAYRON1",
+  "repository": "https://github.com/zerivan/KAYRON1",
+  "license": "Proprietary",
+  "mcpServers": "../.mcp.json"
+}

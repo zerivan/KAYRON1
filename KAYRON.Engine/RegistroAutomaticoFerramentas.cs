@@ -30,6 +30,7 @@ public static class RegistroAutomaticoFerramentas
         services.AddSingleton<ILocalizadorResposta, LocalizadorResposta>();
 
         services.AddSingleton<IFerramenta, FerramentaInfo>();
+        services.AddSingleton<IFerramenta, ConversorUnidades>();
         services.AddSingleton<IFerramenta, FerramentaArquivos>();
         services.AddSingleton<IFerramenta, FerramentaSistema>();
         services.AddSingleton<IFerramenta, FerramentaInternet>();

@@ -112,7 +112,7 @@ public sealed class ExecutorFerramentas
             }
 
             return ResultadoFerramenta.Falha(
-                $"OPERAÃ‡ÃƒO BLOQUEADA: {autorizacao.Motivo}");
+                $"OPERAÇÃO BLOQUEADA: {autorizacao.Motivo}");
         }
 
         try

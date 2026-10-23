@@ -32,10 +32,12 @@ public sealed class Decisor : IDecisor
             contexto as ContextoCiclo
             ?? new ContextoCiclo(contexto);
 
+        var fonteSolicitada = ciclo.Obter("fonte_solicitada");
+
         var entrada =
-            ciclo.Obter("mensagem_atual")
+            instrucao.Conteudo
+            ?? ciclo.Obter("mensagem_atual")
             ?? ciclo.Obter("entrada_original")
-            ?? instrucao.Conteudo
             ?? string.Empty;
 
         entrada = entrada.Trim();
@@ -62,29 +64,7 @@ public sealed class Decisor : IDecisor
             ciclo.Obter("intencao_detectada")
             ?? string.Empty;
 
-        var instrucaoInterpretada =
-            ciclo.Obter("instrucao_interpretada")
-            ?? entrada;
-
-        var continuacaoOrigemInternet =
-            ciclo.Obter("continuacao_origem_internet");
-
-        if (string.Equals(
-                continuacaoOrigemInternet,
-                "sim",
-                StringComparison.OrdinalIgnoreCase) &&
-            !EhIntencaoTecnica(intencao))
-        {
-            ciclo.Adicionar(
-                "intencao_detectada",
-                "internet:pesquisar");
-
-            ciclo.Adicionar(
-                "intencao_evidencia",
-                "continuação de conversa originada por pesquisa na Internet");
-
-            intencao = "internet:pesquisar";
-        }
+        var instrucaoInterpretada = entrada;
 
         _logger.LogInformation(
             "ESTADO DECISOR | Entrada={Entrada} | Intencao={Intencao} | Interpretada={Interpretada} | ResultadoDisponivel={ResultadoDisponivel}",

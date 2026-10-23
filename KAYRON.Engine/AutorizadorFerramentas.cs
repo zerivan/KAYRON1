@@ -126,6 +126,17 @@ public sealed class AutorizadorFerramentas
                     ]
                 },
 
+            "conversao" =>
+                new PoliticaFerramenta
+                {
+                    Permitida = true,
+                    SomenteLeitura = true,
+                    OperacoesPermitidas =
+                    [
+                        "converter"
+                    ]
+                },
+
             _ =>
                 new PoliticaFerramenta
                 {

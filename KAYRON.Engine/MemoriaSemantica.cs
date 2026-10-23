@@ -31,7 +31,7 @@ public sealed class MemoriaSemantica
         var vetorConsulta = await _embedding.GerarAsync(consulta, cancellationToken);
         var candidatos = new List<(KAYRON.Core.MemoriaAprendida Memoria, double Score)>();
 
-        foreach (var memoria in memorias)
+        foreach (var memoria in memorias.Where(EhMemoriaUtilizavel))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var texto = $"{memoria.Chave} {memoria.Valor} {string.Join(' ', memoria.Tags)}";
@@ -62,6 +62,22 @@ public sealed class MemoriaSemantica
             .Take(Math.Min(limite, 10))
             .Select(x => x.Memoria)
             .ToArray();
+    }
+
+    private static bool EhMemoriaUtilizavel(KAYRON.Core.MemoriaAprendida memoria)
+    {
+        if (!string.Equals(memoria.Tipo, "conhecimento", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.Equals(memoria.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) ||
+            !memoria.Tags.Any(tag => string.Equals(tag, "verificado", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var referencia = memoria.AtualizadoEm > memoria.AprendidoEm
+            ? memoria.AtualizadoEm
+            : memoria.AprendidoEm;
+
+        return DateTime.UtcNow - referencia <= TimeSpan.FromDays(7);
     }
 
     private static double PontuarLexical(

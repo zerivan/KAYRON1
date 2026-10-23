@@ -35,15 +35,39 @@ public sealed class GestorConhecimento
         if (string.IsNullOrWhiteSpace(entrada))
             return false;
 
+        var intencaoDetectada =
+            contexto.Obter("intencao_detectada") ?? string.Empty;
+
         var pesquisaSolicitada = string.Equals(
-            contexto.Obter("intencao_detectada"),
+            intencaoDetectada,
             "internet:pesquisar",
             StringComparison.OrdinalIgnoreCase);
+
+        if (intencaoDetectada.StartsWith(
+                "conversa:",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            contexto.Adicionar(
+                "conhecimento:estado",
+                "nao_solicitado");
+
+            return false;
+        }
+
+        if (!pesquisaSolicitada && !DeveAdquirirConhecimento(entrada))
+        {
+            contexto.Adicionar(
+                "conhecimento:estado",
+                "nao_solicitado");
+
+            return false;
+        }
 
         if (!pesquisaSolicitada)
         {
             var memoriaExistente = _memoriaAprendida
                 .Pesquisar(entrada, 3)
+                .Where(EhMemoriaUtilizavel)
                 .FirstOrDefault(m =>
                     string.Equals(m.Tipo, "conhecimento", StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(m.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) &&
@@ -138,6 +162,50 @@ public sealed class GestorConhecimento
         return true;
     }
 
+    private static bool DeveAdquirirConhecimento(string entrada)
+    {
+        var texto = entrada.Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(texto))
+            return false;
+
+        if (texto is "ola" or "olá" or "oi" or "bom dia" or "boa tarde" or "boa noite" or
+            "tudo bem" or "como voce esta" or "como você está")
+            return false;
+
+        var pareceMatematica =
+            texto.Contains("ao quadrado", StringComparison.Ordinal) ||
+            texto.Contains("elevado a", StringComparison.Ordinal) ||
+            texto.Contains("potencia de", StringComparison.Ordinal) ||
+            texto.Contains("potenciacao", StringComparison.Ordinal) ||
+            texto.Contains("potenciação", StringComparison.Ordinal) ||
+            texto.Any(char.IsDigit) &&
+            texto.Any(caractere => "+-*/=×÷".Contains(caractere));
+
+        if (pareceMatematica)
+            return false;
+
+        return texto.Contains("qual ", StringComparison.Ordinal) ||
+               texto.StartsWith("qual?", StringComparison.Ordinal) ||
+               texto.Contains("quais ", StringComparison.Ordinal) ||
+               texto.Contains("quem ", StringComparison.Ordinal) ||
+               texto.Contains("o que ", StringComparison.Ordinal) ||
+               texto.Contains("como ", StringComparison.Ordinal) ||
+               texto.Contains("quando ", StringComparison.Ordinal) ||
+               texto.Contains("onde ", StringComparison.Ordinal) ||
+               texto.Contains("por que ", StringComparison.Ordinal) ||
+               texto.Contains("porque ", StringComparison.Ordinal) ||
+               texto.Contains("quanto ", StringComparison.Ordinal) ||
+               texto.Contains("quantos ", StringComparison.Ordinal) ||
+               texto.Contains("quantas ", StringComparison.Ordinal) ||
+               texto.Contains("explique ", StringComparison.Ordinal) ||
+               texto.Contains("significa ", StringComparison.Ordinal) ||
+               texto.Contains("defina ", StringComparison.Ordinal) ||
+               texto.Contains("principais ", StringComparison.Ordinal) ||
+               texto.Contains("diferença entre ", StringComparison.Ordinal) ||
+               texto.Contains("história de ", StringComparison.Ordinal);
+    }
+
     private static string ConstruirConsultaPesquisa(string entrada)
     {
         var texto = entrada.Trim();
@@ -200,6 +268,22 @@ public sealed class GestorConhecimento
 
         return !marcadoresDeFalha.Any(marcador =>
             texto.Contains(marcador, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool EhMemoriaUtilizavel(KAYRON.Core.MemoriaAprendida memoria)
+    {
+        if (!string.Equals(memoria.Tipo, "conhecimento", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.Equals(memoria.Origem, "pesquisa_verificada", StringComparison.OrdinalIgnoreCase) ||
+            !memoria.Tags.Any(tag => string.Equals(tag, "verificado", StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var referencia = memoria.AtualizadoEm > memoria.AprendidoEm
+            ? memoria.AtualizadoEm
+            : memoria.AprendidoEm;
+
+        return DateTime.UtcNow - referencia <= TimeSpan.FromDays(7);
     }
 
     private static bool TemConhecimentoRelevante(IContexto contexto)

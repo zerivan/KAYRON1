@@ -154,6 +154,7 @@ public sealed class MemoriaPostgres
                        1 - (embedding <=> $1) AS score
                 FROM {tabela}
                 WHERE NOT (tipo = 'conhecimento' AND valor ILIKE 'Pesquisa realizada para:%')
+                  AND (tipo <> 'conhecimento' OR (origem = 'pesquisa_verificada' AND 'verificado' = ANY(tags) AND atualizado_em >= NOW() - INTERVAL '7 days' AND aprendido_em >= NOW() - INTERVAL '7 days'))
                   AND 1 - (embedding <=> $1) >= 0.55
                 ORDER BY embedding <=> $1
                 LIMIT $2
