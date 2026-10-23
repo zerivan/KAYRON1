@@ -79,6 +79,14 @@ public sealed class Decisor : IDecisor
             string.Equals(
                 resultadoDisponivel,
                 "sim",
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                ciclo.Obter("ultima_origem_ferramenta"),
+                "internet",
+                StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(
+                ciclo.Obter("ultima_origem_operacao"),
+                "pesquisar",
                 StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(
