@@ -18,7 +18,7 @@ public partial class App : Application
     private async void Application_Startup(object sender, StartupEventArgs e)
     {
         var builder = Host.CreateApplicationBuilder(e.Args);
-        builder.Logging.ClearProviders();
+        // Mantém os provedores padrão de log para que erros do agente sejam observáveis.
         builder.Configuration
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);

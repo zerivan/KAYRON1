@@ -2,11 +2,12 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="KAYRON" Width="1180" Height="780" MinWidth="520" MinHeight="480"
-        WindowStartupLocation="CenterScreen" Background="{StaticResource BgBrush}"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource BgBrush}"
         SizeChanged="Window_SizeChanged"
-        Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI">
+        Foreground="{DynamicResource TextBrush}" FontFamily="Segoe UI">
     <Window.Resources>
         <Style x:Key="NavButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Margin" Value="4,2"/>
             <Setter Property="FontSize" Value="14"/>
@@ -14,7 +15,7 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
         <Style x:Key="SendButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Padding" Value="18,10"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -24,6 +25,44 @@
             <Setter Property="Margin" Value="2,1"/>
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+        <Style x:Key="ComposerIconButton" TargetType="Button" BasedOn="{StaticResource HistoryButton}">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="IconButtonBackground" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="IconButtonBackground" Property="Background" Value="#252630"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="IconButtonBackground" Property="Background" Value="#333340"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="IconButtonBackground" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="{DynamicResource PanelBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
         <Style TargetType="ScrollBar">
             <Setter Property="Width" Value="6"/>
             <Setter Property="MinWidth" Value="6"/>
@@ -31,14 +70,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="12">
-        <Grid.Background>
-            <RadialGradientBrush Center="0.82,0.48" RadiusX="0.72" RadiusY="0.72">
-                <GradientStop Color="#26113D" Offset="0"/>
-                <GradientStop Color="#100B15" Offset="0.48"/>
-                <GradientStop Color="#080609" Offset="1"/>
-            </RadialGradientBrush>
-        </Grid.Background>
+    <Grid Margin="12" Background="{DynamicResource BgBrush}">
 
         <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="SidebarColumn" Width="260" MinWidth="0" MaxWidth="260"/>
@@ -47,58 +79,146 @@
         </Grid.ColumnDefinitions>
 
         <Border x:Name="SidebarBorder" Grid.Column="0"
-                Background="{StaticResource SidebarBrush}"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                CornerRadius="10" Opacity="0.97">
-            <Grid Margin="14">
+                Background="{DynamicResource SidebarBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                CornerRadius="10" Opacity="0.98">
+            <Grid Margin="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="4,4,4,18" x:Name="SidebarHeader">
+                <Grid Grid.Row="0" Margin="4,4,4,14" x:Name="SidebarHeader">
                     <StackPanel Orientation="Horizontal">
-                <Border x:Name="BrandMark" Width="38" Height="38" CornerRadius="11"
-                                Background="{StaticResource AccentBrush}" Margin="0,0,11,0">
+                        <Border x:Name="BrandMark" Width="38" Height="38" CornerRadius="11"
+                                Background="{DynamicResource AccentBrush}" Margin="0,0,11,0">
                             <TextBlock Text="K" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center"
                                        VerticalAlignment="Center" Foreground="White"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="KAYRON" FontSize="17" FontWeight="SemiBold"/>
                             <TextBlock Text="AI Engineering Agent" FontSize="10"
-                                       Foreground="{StaticResource MutedBrush}"/>
+                                       Foreground="{DynamicResource MutedBrush}"/>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
 
-                <ScrollViewer x:Name="ConversationScroll" Grid.Row="1" VerticalScrollBarVisibility="Visible"
-                              HorizontalScrollBarVisibility="Disabled" Margin="0,10,0,10">
+                <Button x:Name="NewChatButton" Grid.Row="1" Style="{StaticResource SendButton}"
+                        Click="NovaConversa_Click" Margin="2,0,2,12" HorizontalContentAlignment="Center"
+                        ToolTip="Iniciar uma conversa nova">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="＋" FontSize="18" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="NewChatText" Text="Nova conversa" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+
+                <ScrollViewer x:Name="ConversationScroll" Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled" Margin="0,0,0,10">
                     <StackPanel>
-                        <TextBlock Text="CHAT RECENTE" FontSize="10" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentSoftBrush}" Margin="12,12,12,8"/>
-                        <StackPanel x:Name="HistoryList"/>
+                        <TextBlock Text="CONVERSAS" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentSoftBrush}" Margin="10,7,10,8"/>
+
+                        <TextBlock x:Name="PinnedSectionTitle" Text="FIXADAS" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedBrush}" Margin="10,5,10,4"/>
+                        <StackPanel x:Name="PinnedHistoryList"/>
+
+                        <TextBlock x:Name="TodaySectionTitle" Text="HOJE" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedBrush}" Margin="10,10,10,4"/>
+                        <StackPanel x:Name="TodayHistoryList"/>
+
+                        <TextBlock x:Name="YesterdaySectionTitle" Text="ONTEM" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedBrush}" Margin="10,10,10,4"/>
+                        <StackPanel x:Name="YesterdayHistoryList"/>
+
+                        <TextBlock x:Name="Last7DaysSectionTitle" Text="ÚLTIMOS 7 DIAS" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedBrush}" Margin="10,10,10,4"/>
+                        <StackPanel x:Name="Last7DaysHistoryList"/>
+
+                        <TextBlock x:Name="OlderSectionTitle" Text="ANTERIORES / SEM DATA" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedBrush}" Margin="10,10,10,4"/>
+                        <StackPanel x:Name="OlderHistoryList"/>
+
+                        <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="8,12,8,9"/>
+
+                        <TextBlock Text="AGENTE" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentSoftBrush}" Margin="10,4,10,6"/>
+                        <Button x:Name="AgentModelButton" Style="{StaticResource HistoryButton}"
+                                Click="Modelo_Click" ToolTip="Ver o modelo configurado e as ferramentas disponíveis">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="◉" FontSize="16" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                <TextBlock Text="Modelo e ferramentas" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <TextBlock Text="PERSONAS / PROMPTS" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedBrush}" Margin="10,10,10,4"/>
+                        <Button x:Name="PersonaCodeButton" Style="{StaticResource HistoryButton}" Click="PersonaCode_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⌘" FontSize="15" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                <TextBlock Text="Assistente de código" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="PersonaWritingButton" Style="{StaticResource HistoryButton}" Click="PersonaWriting_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="✎" FontSize="15" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                <TextBlock Text="Copiloto de escrita" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="PersonaDataButton" Style="{StaticResource HistoryButton}" Click="PersonaData_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="▤" FontSize="15" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                <TextBlock Text="Analista de dados" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="8,12,8,9"/>
+
+                        <TextBlock Text="INTEGRAÇÕES" FontSize="10" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentSoftBrush}" Margin="10,4,10,6"/>
+                        <Button x:Name="KnowledgeButton" Style="{StaticResource HistoryButton}"
+                                Click="Conhecimento_Click" ToolTip="Adicionar arquivos de texto ao contexto da conversa">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="▣" FontSize="15" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                <TextBlock x:Name="KnowledgeText" Text="Base de conhecimento" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Limpar base de conhecimento" Click="LimparConhecimento_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                        <Button x:Name="ToolsButton" Style="{StaticResource HistoryButton}" Click="Modelo_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⌘" FontSize="15" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                                <TextBlock Text="Ferramentas conectadas" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </ScrollViewer>
 
-                <TextBlock x:Name="StatusPanel" Grid.Row="2" Text="CONFIGURAÇÕES" FontSize="10" FontWeight="SemiBold"
-                           Foreground="{StaticResource AccentSoftBrush}" Margin="12,6,12,8"/>
-
                 <StackPanel Grid.Row="3">
-                    <Button x:Name="NewChatButton" Style="{StaticResource NavButton}"
-                            Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}"
-                            Click="NovaConversa_Click" Margin="4,4,4,4">
+                    <TextBlock x:Name="StatusPanel" Text="PAINEL DE CONTROLE" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentSoftBrush}" Margin="10,2,10,5"/>
+                    <Button x:Name="AccountButton" Style="{StaticResource HistoryButton}" Click="Conta_Click">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="＋" FontSize="19" Margin="0,0,10,0"/>
-                            <TextBlock x:Name="NewChatText" Text="Nova conversa" VerticalAlignment="Center"/>
+                            <TextBlock Text="♙" FontSize="16" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                            <TextBlock Text="Minha conta / plano" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="SettingsButton" Style="{StaticResource NavButton}"
-                            Click="Configuracoes_Click" ToolTip="Configurações e integrações" Margin="4,4,4,0">
+                    <Button x:Name="SettingsButton" Style="{StaticResource HistoryButton}"
+                            Click="Configuracoes_Click" ToolTip="Tema, temperatura e preferências">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="⚙" FontSize="17" Margin="0,0,10,0"/>
-                            <TextBlock x:Name="SettingsText" Text="Configurações" VerticalAlignment="Center"/>
+                            <TextBlock Text="⚙" FontSize="16" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                            <TextBlock x:Name="SettingsText" Text="Configurações gerais" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="HelpButton" Style="{StaticResource HistoryButton}" Click="Ajuda_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="?" FontSize="16" Width="25" Foreground="{DynamicResource AccentSoftBrush}"/>
+                            <TextBlock Text="Ajuda e feedback" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -112,7 +232,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Border Grid.Row="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                 <Grid x:Name="TopBar" Margin="18,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -120,11 +240,11 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="KAYRON" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock Text="  ›  " Foreground="{StaticResource MutedBrush}" FontSize="16"/>
+                        <TextBlock Text="  ›  " Foreground="{DynamicResource MutedBrush}" FontSize="16"/>
                         <TextBlock Text="AI Engineering" FontSize="14"
-                                   Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Button x:Name="ModelButton" Grid.Column="1" Content="IA / Plugins  ▾"
+                    <Button x:Name="ModelButton" Grid.Column="1" Content="Modelo / Ferramentas  ▾"
                             Click="Modelo_Click"/>
                 </Grid>
             </Border>
@@ -137,7 +257,7 @@
                     <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center"
                                 Margin="0,70,0,35">
                         <Border Width="58" Height="58" CornerRadius="18"
-                                Background="{StaticResource AccentBrush}" HorizontalAlignment="Center">
+                                Background="{DynamicResource AccentBrush}" HorizontalAlignment="Center">
                             <TextBlock Text="K" FontSize="30" FontWeight="Bold"
                                        Foreground="White" HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>
@@ -145,48 +265,85 @@
                         <TextBlock Text="Como posso ajudar?" FontSize="28" FontWeight="SemiBold"
                                    HorizontalAlignment="Center" Margin="0,16,0,8"/>
                         <TextBlock Text="Analise projetos, encontre problemas e execute correções com segurança."
-                                   FontSize="14" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="14" Foreground="{DynamicResource MutedBrush}"
                                    HorizontalAlignment="Center"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
 
-            <Border Grid.Row="2" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}"
+            <Border Grid.Row="2" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="1,1,1,0" Padding="20,12,20,16">
                 <StackPanel x:Name="ComposerPanel" Width="680" MaxWidth="680"
                             HorizontalAlignment="Center">
-                    <Border Background="{StaticResource InputBrush}"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    <Border x:Name="EditModePanel" Visibility="Collapsed"
+                            Background="{DynamicResource HoverBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            CornerRadius="8" Padding="10,7" Margin="0,0,0,8">
+                        <DockPanel LastChildFill="True">
+                            <Button DockPanel.Dock="Right" Content="Cancelar edição"
+                                    Click="CancelarEdicao_Click" Padding="8,3" Margin="8,0,0,0"/>
+                            <TextBlock Text="Editando uma pergunta anterior. Ao enviar, as mensagens posteriores serão substituídas."
+                                       TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{DynamicResource AccentSoftBrush}"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <Border x:Name="AttachmentsTray" Visibility="Collapsed"
+                            Background="{DynamicResource HoverBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                            CornerRadius="8" Padding="8" Margin="0,0,0,8">
+                        <WrapPanel x:Name="AttachmentsPanel"/>
+                    </Border>
+                    <Border Background="{DynamicResource InputBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                             CornerRadius="10">
                         <Grid Margin="6">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0">
+                            <Grid Grid.Column="1">
                                 <TextBox x:Name="InputBox" BorderThickness="0"
                                          Background="Transparent" MinHeight="42"
-                                         Foreground="White" CaretBrush="White"
+                                         Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}"
                                          VerticalContentAlignment="Center" AcceptsReturn="True"
                                          TextWrapping="Wrap" IsReadOnly="False" Focusable="True"
                                          KeyDown="InputBox_KeyDown" TextChanged="InputBox_TextChanged"
                                          GotFocus="InputBox_GotFocus" LostFocus="InputBox_LostFocus"/>
                                 <TextBlock x:Name="InputPlaceholder" Text="Pergunte qualquer coisa"
-                                           Foreground="White" Opacity="0.65" FontSize="14"
+                                           Foreground="{DynamicResource MutedBrush}" Opacity="0.9" FontSize="14"
                                            VerticalAlignment="Center" Margin="12,0,8,0"
                                            IsHitTestVisible="False"/>
                             </Grid>
-                            <Button x:Name="VoiceButton" Grid.Column="1" Style="{StaticResource SendButton}" Content="🎙" ToolTip="Ativar conversa por voz" AutomationProperties.Name="Ativar conversa por voz" Click="Voz_Click" Margin="8,0,0,0" MinWidth="48" MaxWidth="48"/>
-                            <Button x:Name="SendButton" Grid.Column="2" Style="{StaticResource SendButton}" Content="Enviar  ›" ToolTip="Enviar mensagem (Enter)" AutomationProperties.Name="Enviar mensagem" Click="Enviar_Click" Margin="8,0,0,0" MinWidth="86" MaxWidth="86"/>
+                            <Button x:Name="AttachmentButton" Grid.Column="0" Style="{StaticResource ComposerIconButton}" ToolTip="Anexar arquivos ou fotos para analisar" AutomationProperties.Name="Anexar arquivos e fotos" Click="AnexarArquivos_Click" Margin="0,0,2,0" Width="36" MinWidth="36" MaxWidth="36" Height="40" Padding="0" VerticalAlignment="Bottom">
+                                <Path Data="M12,5 V19 M5,12 H19" Width="16" Height="16" Stretch="Uniform"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                      StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      IsHitTestVisible="False"/>
+                            </Button>
+                            <Button x:Name="VoiceButton" Grid.Column="2" Style="{StaticResource ComposerIconButton}" ToolTip="Ativar conversa por voz" AutomationProperties.Name="Ativar conversa por voz" Click="Voz_Click" Margin="6,0,0,0" Width="36" MinWidth="36" MaxWidth="36" Height="40" Padding="0" VerticalAlignment="Bottom">
+                                <Path Data="M12,2 A3,3 0 0 0 9,5 V12 A3,3 0 0 0 15,12 V5 A3,3 0 0 0 12,2 M6,11 V12 A6,6 0 0 0 18,12 V11 M12,18 V22 M9,22 H15"
+                                      Width="18" Height="20" Stretch="Uniform" Fill="Transparent"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                      StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round" IsHitTestVisible="False"/>
+                            </Button>
+                            <Button x:Name="SendButton" Grid.Column="3" Style="{StaticResource SendButton}" ToolTip="Enviar mensagem (Enter)" AutomationProperties.Name="Enviar mensagem" Click="Enviar_Click" Margin="6,0,0,0" Width="44" MinWidth="44" MaxWidth="44" Height="44" Padding="0" VerticalAlignment="Bottom">
+                                <Path Data="M12,21 V3 M5,10 L12,3 L19,10" Width="18" Height="20" Stretch="Uniform" Fill="Transparent"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                      StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round" IsHitTestVisible="False"/>
+                            </Button>
                         </Grid>
                     </Border>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,9,0,0">
                         <Ellipse x:Name="VoiceStatusDot" Width="9" Height="9" Fill="#77717D" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock x:Name="VoiceStatusText" Text="Voz desligada" Foreground="{StaticResource MutedBrush}" FontSize="10" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="VoiceStatusText" Text="Voz desligada" Foreground="{DynamicResource MutedBrush}" FontSize="10" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="KAYRON pode executar ações no projeto. Revise operações que alterem arquivos antes da confirmação."
-                               Foreground="{StaticResource MutedBrush}" FontSize="10"
+                               Foreground="{DynamicResource MutedBrush}" FontSize="10"
                                HorizontalAlignment="Center" Margin="0,5,0,0"/>
                 </StackPanel>
             </Border>
